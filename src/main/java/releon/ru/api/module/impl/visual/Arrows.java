@@ -1,239 +1,145 @@
 package releon.ru.api.module.impl.visual;
-
-import net.minecraft.client.CameraType;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
-import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.util.Mth;
-import net.minecraft.world.entity.player.Player;
-import releon.ru.api.events.annotation.SubscribeEvent;
-import releon.ru.api.events.impl.DrawEvent;
-import releon.ru.api.events.types.EventPriority;
 import releon.ru.api.module.Module;
 import releon.ru.api.module.ModuleCategory;
-import releon.ru.api.settings.impl.BooleanSetting;
-import releon.ru.api.settings.impl.ColorSetting;
-import releon.ru.api.settings.impl.NumberSetting;
-import releon.ru.utils.render.animation.Easings;
-import releon.ru.utils.render.animation.SmoothAnimation;
-import releon.ru.utils.render.color.ColorUtil;
-import releon.ru.utils.render.ui.Render2D;
-import releon.ru.utils.render.ui.font.FontType;
+import releon.ru.api.settings.impl.*;
+import releon.ru.api.events.annotation.SubscribeEvent;
+import releon.ru.api.events.impl.DrawEvent;
+import releon.ru.utils.render.IncludeDefaults;
+import releon.ru.utils.render.Render3D;
 import releon.ru.utils.repository.friend.FriendUtils;
 import releon.ru.utils.repository.gps.GpsUtils;
+import releon.ru.api.module.impl.visual.esp.prism.PrismDraw;
 
-import java.awt.Color;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.util.Mth;
+import java.util.LinkedHashMap;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Comparator;
 
+/** Tick-cached radar targets, antialiased artwork and frame-rate-independent angle interpolation. */
 public class Arrows extends Module {
-    private static final String ARROW_TEXTURE = "releon:textures/particles/ghost-triangle.png";
-    private static final float GPS_LIFT = 14.0f;
-
-    private final NumberSetting arrowsDistance = register(new NumberSetting("Дистанция", "Дистанция стрелок от прицела.", 20.0, 1.0, 20.0, 0.5));
-    private final NumberSetting arrowSize = register(new NumberSetting("Размер", "Размер стрелки.", 15, 10.0, 25.0, 0.5));
-    private final ColorSetting arrowColor = register(new ColorSetting("Цвет", "Цвет обычной стрелки.", new Color(255, 255, 255, 255)));
-    private final ColorSetting friendColor = register(new ColorSetting("Цвет друга", "Цвет стрелки на друга.", new Color(0, 255, 0, 255)));
-    private final BooleanSetting friendDistance = register(new BooleanSetting("Дистанция друга", "Показывать расстояние над стрелкой друга.", true));
-    private final ColorSetting gpsColor = register(new ColorSetting("Цвет GPS", "Цвет GPS-стрелки.", new Color(0, 0, 0, 255)));
-    private final BooleanSetting gpsDistanceSetting = register(new BooleanSetting("Дистанция GPS", "Показывать расстояние над GPS-стрелкой.", true));
-
-    private final SmoothAnimation distanceAnimation = new SmoothAnimation();
-    private final SmoothAnimation yawAnimation = new SmoothAnimation();
-    private final SmoothAnimation pitchAnimation = new SmoothAnimation();
-    private final SmoothAnimation cameraYawAnimation = new SmoothAnimation();
-    private final SmoothAnimation gpsFade = new SmoothAnimation();
-    private final List<Arrow> arrows = new ArrayList<>();
-
-    private double gpsTargetX;
-    private double gpsTargetZ;
-
-    public Arrows() {
-        super("Arrows", "Рисует стрелки на игроков за пределами экрана.", ModuleCategory.VISUAL);
+    public final MultiModeSetting targetType=register(multi("Тип","Кого подсвечивать стрелками.",new String[]{"Игроки","Голые","Друзья","Мобы"},true));
+    public final ModeSetting style=register(new ModeSetting("Arrow Style","Shape of radar arrows.","Chevron","Chevron","Triangle","Pointer","Double"));
+    public final NumberSetting size=register(new NumberSetting("Размер","Размер стрелочки.",12,6,32,1));
+    public final NumberSetting offset=register(new NumberSetting("Смещение","Радиус кольца от центра экрана.",75,20,260,1));
+    public final NumberSetting verticalRatio=register(new NumberSetting("Vertical Radius","Vertical radius relative to horizontal radius.",1,.4,1.5,.05));
+    public final NumberSetting minDistance=register(new NumberSetting("Minimum Distance","Hide targets closer than this distance.",0,0,64,1));
+    public final NumberSetting maxDistance=register(new NumberSetting("Maximum Distance","Maximum target distance.",96,16,256,1));
+    public final NumberSetting targetLimit=register(new NumberSetting("Arrow Limit","Maximum nearest targets.",16,1,64,1));
+    public final NumberSetting animationSpeed=register(new NumberSetting("Arrow Animation","Animation response speed.",12,4,24,1));
+    public final ColorSetting color=register(new ColorSetting("Цвет","Цвет стрелочек.",new java.awt.Color(0xFFA7A1FF,true)));
+    public final ColorSetting friendColor=register(new ColorSetting("Friend Arrow Color","Radar color for friends.",new java.awt.Color(0xFF8AD4AB,true)));
+    public final NumberSetting opacity=register(new NumberSetting("Прозрачность","Прозрачность стрелочек.",1,.1,1,.05));
+    public final BooleanSetting offscreenOnly=register(new BooleanSetting("Offscreen Only","Hide arrows for targets already on screen.",true));
+    public final BooleanSetting showName=register(new BooleanSetting("Ник","Подписывать ник над стрелкой.",false));
+    public final BooleanSetting showDistance=register(new BooleanSetting("Дистанция","Показывать дистанцию под стрелкой.",true));
+    public final NumberSetting labelSize=register(new NumberSetting("Arrow Label Size","Size of names and distances.",7,5,12,1));
+    public final NumberSetting labelGap=register(new NumberSetting("Arrow Label Gap","Distance from arrow to labels.",4,0,16,1));
+    private static final EquipmentSlot[] ARMOR={EquipmentSlot.HEAD,EquipmentSlot.CHEST,EquipmentSlot.LEGS,EquipmentSlot.FEET};
+    private static final Identifier[] TEXTURES={id("chevron"),id("triangle"),id("pointer"),id("double")};
+    private static Identifier id(String name){return Identifier.fromNamespaceAndPath("releon","textures/hud/arrow_"+name+".png");}
+    private static class Target {LivingEntity entity;boolean wanted,friend;float angle,alpha,distance;String name,range="";int rounded=-1;Target(LivingEntity e){entity=e;name=e.getName().getString();angle=angleTo(e.getX(),e.getZ())-(float)Math.PI/2;}}
+    private final LinkedHashMap<Integer,Target> targets=new LinkedHashMap<>();
+    private Object world;
+    public Arrows(){
+        super("Arrows","Плавные указатели на игроков, мобов и GPS.",ModuleCategory.VISUAL);
+        IncludeDefaults.apply("Arrows",getSettings(),"");
+        for(var setting:java.util.List.of(verticalRatio,minDistance,targetLimit,animationSpeed,opacity,labelSize,labelGap,showName,showDistance,offscreenOnly))setting.setVisible(false);
+        String[] options={"Ник","Дистанция","Только за экраном"};
+        var flags=register(new MultiModeSetting("Показывать","",options,"Дистанция","Только за экраном"));
+        flags.addListener((setting,old,value)->{showName.setValue(value.contains("Ник"));showDistance.setValue(value.contains("Дистанция"));offscreenOnly.setValue(value.contains("Только за экраном"));});
     }
+    private static MultiModeSetting multi(String n,String d,String[] options,boolean selected){return new MultiModeSetting(n,d,options,selected?options:new String[0]);}
+    private long previousFrame;
+    private final org.joml.Matrix4f projection=new org.joml.Matrix4f();
+    private final org.joml.Vector4f projected=new org.joml.Vector4f();
+    private float delta(){long now=System.nanoTime();float dt=previousFrame==0?1f/60:Math.min(.1f,(now-previousFrame)/1e9f);previousFrame=now;return dt;}
+    private static int withAlpha(int c,float a){return PrismDraw.setAlpha(c,Math.round((c>>>24)*a));}
+    private static float angleTo(double x,double z){var mc=net.minecraft.client.Minecraft.getInstance();return (float)(Math.atan2(z-mc.player.getZ(),x-mc.player.getX())-Math.toRadians(mc.gameRenderer.getMainCamera().yRot())-Math.PI/2);}
+    @SubscribeEvent private void draw(DrawEvent event){if(mc.player==null||mc.level==null)return;PrismDraw.begin(event.getGraphics());projection.set(Render3D.lastProjMat).mul(Render3D.lastModMat);onRender2D(event.getGraphics(),mc.getWindow().getGuiScaledWidth(),mc.getWindow().getGuiScaledHeight());PrismDraw.end(event.getGraphics());}
 
-    @Override
-    protected void onEnable() {
-        arrows.clear();
-        gpsFade.set(0.0);
-    }
-
-    @Override
-    protected void onDisable() {
-        arrows.clear();
-        gpsFade.set(0.0);
-    }
-
-    @SubscribeEvent(priority = EventPriority.MONITOR)
-    private void onDraw(DrawEvent event) {
-        if (mc.player == null || mc.level == null || mc.options.getCameraType() != CameraType.FIRST_PERSON) {
-            return;
+    @Override public void onDisable(){targets.clear();world=null;}
+    private final ArrayList<LivingEntity> candidates=new ArrayList<>();
+    @Override public void onTick(net.minecraft.client.Minecraft client){
+        if(mc.player==null||mc.level==null){onDisable();return;}
+        if(world!=mc.level){targets.clear();world=mc.level;}
+        for(Target t:targets.values())t.wanted=false;
+        candidates.clear();
+        double min=minDistance.getValue(),max=Math.max(min,maxDistance.getValue());
+        for(var e:mc.level.entitiesForRendering()){
+            if(e==mc.player||!(e instanceof LivingEntity living)||!living.isAlive()||living.isSpectator())continue;
+            double d=e.distanceToSqr(mc.player);if(d<min*min||d>max*max)continue;
+            boolean friend=living instanceof Player p&&FriendUtils.isFriend(p);
+            boolean accepted;
+            if(living instanceof Player player){boolean naked=true;for(EquipmentSlot slot:ARMOR)if(!player.getItemBySlot(slot).isEmpty()){naked=false;break;}
+                accepted=targetType.isSelected(friend?"Друзья":naked?"Голые":"Игроки");
+            }else accepted=(living instanceof Animal||living instanceof Monster)&&targetType.isSelected("Мобы");
+            if(accepted)candidates.add(living);
         }
-
-        try {
-            distanceAnimation.update();
-            yawAnimation.update();
-            pitchAnimation.update();
-            cameraYawAnimation.update();
-
-            float size = 45.0f + arrowsDistance.getFloat();
-            if (mc.screen instanceof InventoryScreen) {
-                size += 80.0f;
-            }
-            if (mc.player.isShiftKeyDown()) {
-                size -= 20.0f;
-            }
-            if (isMoving()) {
-                size += 10.0f;
-            }
-
-            float strafeInput = mc.player.input.getMoveVector().x;
-            float forwardInput = mc.player.input.getMoveVector().y;
-            yawAnimation.run(strafeInput * 5.0f, 0.75, Easings.EXPO_OUT, true);
-            pitchAnimation.run(forwardInput * 5.0f, 0.75, Easings.EXPO_OUT, true);
-            cameraYawAnimation.run(mc.gameRenderer.getMainCamera().yRot(), 0.75, Easings.EXPO_OUT, true);
-            distanceAnimation.run(size, 1.0, Easings.EXPO_OUT, true);
-
-            for (Arrow arrow : arrows) {
-                arrow.active = false;
-            }
-
-            if (mc.level.players() != null) {
-                for (AbstractClientPlayer player : mc.level.players()) {
-                    if (!isValidPlayer(player)) {
-                        continue;
-                    }
-                    Arrow arrow = findArrow(player);
-                    if (arrow == null) {
-                        arrow = new Arrow(player);
-                        arrows.add(arrow);
-                    }
-                    arrow.active = true;
-                    arrow.fade.run(1.0, 0.20, Easings.CUBIC_OUT, true);
-                }
-            }
-
-            for (int i = arrows.size() - 1; i >= 0; i--) {
-                Arrow arrow = arrows.get(i);
-                if (!arrow.active) {
-                    arrow.fade.run(0.0, 0.20, Easings.CUBIC_OUT, true);
-                    if (arrow.fade.get() <= 0.01f && !arrow.fade.isAlive()) {
-                        arrows.remove(i);
-                    }
-                }
-            }
-
-            GpsUtils.GpsTarget gpsTarget = GpsUtils.get();
-            boolean gpsActive = gpsTarget != null;
-            if (gpsActive) {
-                gpsTargetX = gpsTarget.x();
-                gpsTargetZ = gpsTarget.z();
-            }
-            gpsFade.update();
-            gpsFade.run(gpsActive ? 1.0 : 0.0, 0.20, Easings.CUBIC_OUT, true);
-
-            int screenWidth = mc.getWindow().getGuiScaledWidth();
-            int screenHeight = mc.getWindow().getGuiScaledHeight();
-            float centerX = screenWidth / 2.0f;
-            float centerY = screenHeight / 2.0f;
-            double cameraYaw = cameraYawAnimation.getValue();
-            double cos = Mth.cos((float) (cameraYaw * (Math.PI * 2.0 / 360.0)));
-            double sin = Mth.sin((float) (cameraYaw * (Math.PI * 2.0 / 360.0)));
-            double cameraX = mc.gameRenderer.getMainCamera().position().x;
-            double cameraZ = mc.gameRenderer.getMainCamera().position().z;
-
-            for (Arrow arrow : arrows) {
-                arrow.fade.update();
-                float alpha = arrow.fade.get();
-                if (alpha <= 0.01f) {
-                    continue;
-                }
-
-                Player player = arrow.player;
-                if (player == null || player.isRemoved() || !player.isAlive()) {
-                    continue;
-                }
-
-                double playerX = Mth.lerp(event.getPartialTicks(), player.xOld, player.getX()) - cameraX;
-                double playerZ = Mth.lerp(event.getPartialTicks(), player.zOld, player.getZ()) - cameraZ;
-                double rotY = -(playerZ * cos - playerX * sin);
-                double rotX = -(playerX * cos + playerZ * sin);
-                float angle = (float) (Math.atan2(rotY, rotX) * 180.0 / Math.PI);
-                float x = (float) (distanceAnimation.getValue() * alpha * Mth.cos((float) Math.toRadians(angle)) + centerX + yawAnimation.getValue());
-                float y = (float) (distanceAnimation.getValue() * alpha * Mth.sin((float) Math.toRadians(angle)) + centerY + pitchAnimation.getValue());
-                boolean isFriend = FriendUtils.isFriend(player);
-                int baseColor = isFriend ? friendColor.getValue().getRGB() : arrowColor.getValue().getRGB();
-                int color = ColorUtil.multAlpha(baseColor, alpha);
-                drawArrow(x, y, angle, color);
-
-                if (isFriend && friendDistance.getValue()) {
-                    double distance = Math.sqrt(playerX * playerX + playerZ * playerZ);
-                    float halfSize = arrowSize.getFloat() * 0.5f;
-                    drawDistanceLabel(x, y - halfSize - 8.0f, Math.round(distance) + "m", color);
-                }
-            }
-
-            float gpsAlpha = gpsFade.get();
-            if (gpsAlpha > 0.01f) {
-                double gpsX = gpsTargetX - cameraX;
-                double gpsZ = gpsTargetZ - cameraZ;
-                double rotY = -(gpsZ * cos - gpsX * sin);
-                double rotX = -(gpsX * cos + gpsZ * sin);
-                float angle = (float) (Math.atan2(rotY, rotX) * 180.0 / Math.PI);
-                float x = (float) (distanceAnimation.getValue() * gpsAlpha * Mth.cos((float) Math.toRadians(angle)) + centerX + yawAnimation.getValue());
-                float y = (float) (distanceAnimation.getValue() * gpsAlpha * Mth.sin((float) Math.toRadians(angle)) + centerY + pitchAnimation.getValue()) - GPS_LIFT * gpsAlpha;
-                int color = ColorUtil.multAlpha(gpsColor.getValue().getRGB(), gpsAlpha);
-                drawArrow(x, y, angle, color);
-
-                if (gpsDistanceSetting.getValue()) {
-                    double distance = Math.sqrt(gpsX * gpsX + gpsZ * gpsZ);
-                    float halfSize = arrowSize.getFloat() * 0.5f;
-                    drawDistanceLabel(x, y - halfSize - 8.0f, Math.round(distance) + "m", color);
-                }
-            }
-        } catch (Exception ignored) {}
+        candidates.sort(Comparator.comparingDouble(e->e.distanceToSqr(mc.player)));
+        for(int i=0;i<Math.min(targetLimit.getValue().intValue(),candidates.size());i++){
+            LivingEntity entity=candidates.get(i);Target t=targets.computeIfAbsent(entity.getId(),key->new Target(entity));t.wanted=true;
+            t.friend=entity instanceof Player p&&FriendUtils.isFriend(p);
+        }
     }
-
-    private void drawArrow(float x, float y, float angle, int color) {
-        try {
-            float size = arrowSize.getFloat();
-            float halfSize = size * 0.5f;
-            Render2D.image(ARROW_TEXTURE, x - halfSize, y - halfSize, size, 0.0f, angle + 90.0f, x, y, color);
-        } catch (Exception ignored) {}
-    }
-
-    private void drawDistanceLabel(float x, float y, String text, int color) {
-        try {
-            float size = 6.0f;
-            float width = Render2D.textWidth(FontType.SEMIBOLD, text, size);
-            Render2D.text(FontType.SEMIBOLD, text, x - width * 0.5f, y, size, color);
-        } catch (Exception ignored) {}
-    }
-
-    private Arrow findArrow(Player player) {
-        for (Arrow arrow : arrows) {
-            if (arrow.player == player) {
-                return arrow;
+    public void onRender2D(GuiGraphics g,int sw,int sh){
+        if(mc.player==null||mc.level==null)return;
+        float dt=delta(),f=1-(float)Math.exp(-animationSpeed.getFloat()*Math.min(.1f,dt));
+        float arrowSize=size.getFloat(),rx=Math.min(offset.getFloat(),sw*.45f-arrowSize),ry=Math.min(offset.getFloat()*verticalRatio.getFloat(),sh*.45f-arrowSize);
+        int texture=switch(style.getValue()){case "Triangle"->1;case "Pointer"->2;case "Double"->3;default->0;};
+        var gps=GpsUtils.get();
+        if(gps!=null){
+            float a=angleTo(gps.x(),gps.z())-(float)Math.PI/2;
+            float gx=sw*.5f+(float)Math.cos(a)*rx,gy=sh*.5f+(float)Math.sin(a)*ry;
+            int gc=color.getValue().getRGB();
+            g.pose().pushMatrix();g.pose().translate(gx,gy);g.pose().rotate(a);
+            PrismDraw.image(g,TEXTURES[texture],-arrowSize*.5f,-arrowSize*.5f,arrowSize,gc);g.pose().popMatrix();
+            if(showDistance.getValue()){String range=Math.round(Math.hypot(gps.x()-mc.player.getX(),gps.z()-mc.player.getZ()))+"m";int font=labelSize.getValue().intValue();PrismDraw.drawInter(g,range,gx-PrismDraw.interWidth(range,font)*.5f,gy+arrowSize*.5f+labelGap.getFloat(),font,gc);}
+        }
+        var it=targets.values().iterator();while(it.hasNext()){
+            Target t=it.next();float partial=mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+            double ex=Mth.lerp(partial,t.entity.xOld,t.entity.getX()),ez=Mth.lerp(partial,t.entity.zOld,t.entity.getZ());
+            double ey=Mth.lerp(partial,t.entity.yOld,t.entity.getY());
+            float desired=angleTo(ex,ez)-(float)Math.PI/2;
+            t.angle+=(float)Math.atan2(Math.sin(desired-t.angle),Math.cos(desired-t.angle))*f;
+            boolean visible=t.wanted&&t.entity.isAlive();
+            // Offscreen-only: the arrow disappears the moment the entity itself is inside the
+            // viewport - feet or head projected on screen means the player can already see it.
+            if(visible&&offscreenOnly.getValue()){
+                boolean feetOn=onScreen(ex,ey,ez,sw,sh);
+                boolean headOn=feetOn||onScreen(ex,ey+t.entity.getBbHeight(),ez,sw,sh);
+                if(feetOn||headOn)visible=false;
+            }
+            t.alpha+=( (visible?1:0)-t.alpha)*f;
+            if(!t.wanted&&t.alpha<.001f){it.remove();continue;}if(t.alpha<.005f)continue;
+            float x=sw*.5f+(float)Math.cos(t.angle)*rx,y=sh*.5f+(float)Math.sin(t.angle)*ry;
+            int c=withAlpha((t.friend?friendColor:color).getValue().getRGB(),opacity.getFloat()*t.alpha);
+            g.pose().pushMatrix();g.pose().translate(x,y);g.pose().rotate(t.angle);
+            PrismDraw.image(g,TEXTURES[texture],-arrowSize*.5f,-arrowSize*.5f,arrowSize,c);g.pose().popMatrix();
+            int font=labelSize.getValue().intValue();float gap=labelGap.getFloat();
+            if(showName.getValue())PrismDraw.drawInter(g,t.name,x-PrismDraw.interWidth(t.name,font)*.5f,PrismDraw.interCenteredY(y-arrowSize*.5f-gap-font,font,font),font,c);
+            if(showDistance.getValue()){
+                t.distance+=(t.entity.distanceTo(mc.player)-t.distance)*f;int rounded=Math.round(t.distance);
+                if(t.rounded!=rounded){t.rounded=rounded;t.range=rounded+"m";}
+                PrismDraw.drawInter(g,t.range,x-PrismDraw.interWidth(t.range,font)*.5f,PrismDraw.interCenteredY(y+arrowSize*.5f+gap,font,font),font,c);
             }
         }
-        return null;
     }
 
-    private boolean isValidPlayer(Player player) {
-        return player != null && player != mc.player && !player.isRemoved() && player.isAlive();
-    }
-
-    private boolean isMoving() {
-        return mc.player.input.getMoveVector().y != 0.0f || mc.player.input.getMoveVector().x != 0.0f;
-    }
-
-    private static final class Arrow {
-        private final Player player;
-        private final SmoothAnimation fade = new SmoothAnimation();
-        private boolean active;
-
-        private Arrow(Player player) {
-            this.player = player;
-            this.fade.set(0.0);
-        }
+    private final org.joml.Vector2f screenPos=new org.joml.Vector2f();
+    /** True when the world point projects inside the viewport; false behind the camera. */
+    private boolean onScreen(double x,double y,double z,int sw,int sh){
+        var camera=mc.gameRenderer.getMainCamera().position();
+        projected.set((float)(x-camera.x),(float)(y-camera.y),(float)(z-camera.z),1);
+        projection.transform(projected);
+        if(projected.w<=.05f)return false;
+        float nx=projected.x/projected.w,ny=projected.y/projected.w;
+        return nx>=-1&&nx<=1&&ny>=-1&&ny<=1;
     }
 }

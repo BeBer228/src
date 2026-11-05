@@ -10,8 +10,15 @@ import java.util.OptionalDouble;
 public final class RenderSampler {
     private static GpuSampler linear;
     private static GpuSampler nearest;
+    private static GpuSampler repeat;
 
     private RenderSampler() {
+    }
+
+    public static GpuSampler repeat() {
+        if (repeat == null) repeat = RenderSystem.getDevice().createSampler(AddressMode.REPEAT, AddressMode.REPEAT,
+                FilterMode.LINEAR, FilterMode.LINEAR, 1, OptionalDouble.empty());
+        return repeat;
     }
 
     public static GpuSampler linear() {

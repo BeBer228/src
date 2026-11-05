@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import releon.ru.api.events.impl.DrawEvent;
 import releon.ru.api.module.impl.visual.Hud;
+import releon.ru.api.module.impl.visual.hudmodern.NewHudRenderer;
 import releon.ru.manager.Manager;
 import releon.ru.utils.render.ui.Render2D;
 
@@ -62,12 +63,22 @@ public final class HudRenderLayer {
         }
 
         Hud hud = Hud.getInstance();
-        if (hud == null || !hud.isEnabled()) {
+        if (hud != null && hud.isEnabled()) {
+            Render2D.beginFrame(graphics);
+            hud.renderHudLayer(new DrawEvent(graphics, partialTick, layer));
+            Render2D.flush();
+            graphics.nextStratum();
+            return;
+        }
+
+        // HUD New is usable as a standalone module even when the base HUD is disabled.
+        NewHudRenderer modern = NewHudRenderer.getInstance();
+        if (modern == null || !modern.isEnabled()) {
             return;
         }
 
         Render2D.beginFrame(graphics);
-        hud.renderHudLayer(new DrawEvent(graphics, partialTick, layer));
+        modern.render(graphics);
         Render2D.flush();
         graphics.nextStratum();
     }

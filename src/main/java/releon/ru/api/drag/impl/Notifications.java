@@ -76,6 +76,12 @@ public final class Notifications extends HudPanel {
     }
 
     private static void add(NotifEntry entry, SoundEvent sound) {
+        add(entry, sound, null);
+    }
+
+    private static void add(NotifEntry entry, SoundEvent sound, Component rich) {
+        releon.ru.api.module.impl.visual.hudmodern.NewNotices.add(entry.accent, entry.accent + entry.text,
+                entry.style == NotifStyle.TOGGLE, entry.toggled, entry.stayMs, rich);
         if (NOTIFICATIONS.size() >= MAX_NOTIFICATIONS) {
             NOTIFICATIONS.subList(0, NOTIFICATIONS.size() - MAX_NOTIFICATIONS + 1).clear();
         }
@@ -109,7 +115,8 @@ public final class Notifications extends HudPanel {
     }
 
     public static void addList(Component text, long removeTime, SoundEvent sound) {
-        push("", text.getString(), removeTime, sound);
+        add(new NotifEntry("", text.getString(), "v", NotifStyle.ICON, false,
+                System.currentTimeMillis() + Math.max(1, removeTime)), sound, text);
     }
 
     @SubscribeEvent

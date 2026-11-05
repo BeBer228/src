@@ -51,18 +51,19 @@ public class ColorOption extends ClickGuiOption {
     private float alphaY;
     private float alphaWidth;
     private float alphaHeight;
+    private boolean editSecondary;
 
     public ColorOption(ColorSetting setting) {
         super(setting.getName());
         this.setting = setting;
-        applyColor(setting.getValue());
+        applyColor(setting.getCustomColor());
         openAnimation.set(0.0);
     }
 
     @Override
     protected void renderControl(GuiGraphics graphics, float x, float y, float width, float height, float scale, float alpha) {
         if (dragMode == 0) {
-            applyColor(setting.getValue());
+            applyColor(editSecondary ? setting.getSecondary() : setting.getCustomColor());
         }
         swatchSize = 10.0f;
         swatchX = x + width - swatchSize;
@@ -70,10 +71,10 @@ public class ColorOption extends ClickGuiOption {
         openAnimation.update();
         float openP = openAnimation.get();
 
-        int current = currentRgb();
+        int current = setting.getValue().getRGB();
         if (current != hexColor || hexText == null) {
             hexColor = current;
-            hexText = String.format("#%06X", current & 0xFFFFFF);
+            hexText = String.format("#%08X", current);
         }
         String hex = hexText;
         float hexW = textWidth(hex, ClickGuiTheme.FS_VALUE);
@@ -85,8 +86,9 @@ public class ColorOption extends ClickGuiOption {
             Render2D.outline(swatchX - 1.6f, swatchY - 1.6f, swatchSize + 3.2f, swatchSize + 3.2f, 3.6f, 0.8f,
                     ClickGuiTheme.c(ClickGuiTheme.ACCENT, openP * alpha));
         }
+        checker(swatchX, swatchY, swatchSize, swatchSize, alpha);
         Render2D.rect(swatchX, swatchY, swatchSize, swatchSize, 2.6f,
-                color(red(current), green(current), blue(current), Math.max(60, Math.round(alphaValue * 255.0f)), alpha));
+                color(red(current), green(current), blue(current), current >>> 24, alpha));
         ClickGuiTheme.border(swatchX, swatchY, swatchSize, swatchSize, 2.6f, ClickGuiTheme.white(0.16f * alpha));
         renderLabelBlock(graphics, "color", hexX - 6.0f, swatchX - 6.0f);
     }
@@ -99,12 +101,12 @@ public class ColorOption extends ClickGuiOption {
         }
 
         float popupAlpha = alpha * progress;
-        popupWidth = 104.0f;
-        popupHeight = 94.0f;
+        popupWidth = 132.0f;
+        popupHeight = 146.0f;
         popupX = x + width - popupWidth;
         popupY = swatchY + swatchSize + 4.0f - (1.0f - progress) * 4.0f;
         paletteX = popupX + 7.0f;
-        paletteY = popupY + 7.0f;
+        paletteY = popupY + 26.0f;
         paletteSize = 66.0f;
         hueX = paletteX + paletteSize + 6.0f;
         hueY = paletteY;
@@ -116,9 +118,31 @@ public class ColorOption extends ClickGuiOption {
         alphaHeight = 6.0f;
 
         renderPopupSurface(popupX, popupY, popupWidth, popupHeight, popupAlpha);
+        String[] names = {"Свой", "Тема", "Радуга", "Градиент"};
+        for (int i = 0; i < names.length; i++) {
+            float bx = popupX + 5 + i * 31;
+            Render2D.rect(bx, popupY + 6, 29, 14, 3,
+                    ClickGuiTheme.c(i == setting.getMode().ordinal() ? ClickGuiTheme.ACCENT_DIM : ClickGuiTheme.FIELD, popupAlpha));
+            ClickGuiTheme.textCenter(FontType.SEMIBOLD, names[i], bx + 14.5f, popupY + 13, 4.5f,
+                    ClickGuiTheme.c(ClickGuiTheme.TEXT, popupAlpha));
+        }
         drawPalette(popupAlpha);
         drawHueSlider(popupAlpha);
         drawAlphaSlider(popupAlpha);
+        ClickGuiTheme.text(FontType.SEMIBOLD, "Непрозрачность " + Math.round(alphaValue * 100) + "%",
+                paletteX, alphaY + 15, 5.5f, ClickGuiTheme.c(ClickGuiTheme.TEXT_DIM, popupAlpha));
+        String detail = switch (setting.getMode()) {
+            case GRADIENT -> editSecondary ? "Цвет 2  ·  переключить" : "Цвет 1  ·  переключить";
+            case RAINBOW -> ColorSetting.PRESETS[setting.getPreset()];
+            case THEME -> "Цвет текущей темы";
+            default -> "Собственный цвет";
+        };
+        ClickGuiTheme.text(FontType.SEMIBOLD, detail, paletteX, popupY + 124, 5.5f,
+                ClickGuiTheme.c(ClickGuiTheme.TEXT, popupAlpha));
+        if (setting.getMode() == ColorSetting.Mode.GRADIENT || setting.getMode() == ColorSetting.Mode.RAINBOW) {
+            ClickGuiTheme.text(FontType.SEMIBOLD, String.format(java.util.Locale.ROOT, "Скорость %.1fx  − / +", setting.getSpeed()),
+                    paletteX, popupY + 138, 5.5f, ClickGuiTheme.c(ClickGuiTheme.TEXT_DIM, popupAlpha));
+        }
     }
 
     @Override
@@ -130,6 +154,23 @@ public class ColorOption extends ClickGuiOption {
         double mouseX = event.x();
         double mouseY = event.y();
         if (isPopupVisible()) {
+            if (hovered(mouseX, mouseY, popupX + 5, popupY + 6, 124, 14)) {
+                int index = Math.min(3, (int) ((mouseX - popupX - 5) / 31));
+                setting.setMode(ColorSetting.Mode.values()[index]);
+                editSecondary = false;
+                applyColor(setting.getCustomColor());
+                return true;
+            }
+            if (hovered(mouseX, mouseY, popupX + 5, popupY + 116, 122, 14)) {
+                if (setting.getMode() == ColorSetting.Mode.GRADIENT) editSecondary = !editSecondary;
+                if (setting.getMode() == ColorSetting.Mode.RAINBOW) setting.setPreset((setting.getPreset() + 1) % ColorSetting.PRESETS.length);
+                applyColor(editSecondary ? setting.getSecondary() : setting.getCustomColor());
+                return true;
+            }
+            if (hovered(mouseX, mouseY, popupX + 5, popupY + 131, 122, 14)) {
+                setting.setSpeed(setting.getSpeed() + (mouseX < popupX + popupWidth / 2 ? -0.1f : 0.1f));
+                return true;
+            }
             if (hovered(mouseX, mouseY, paletteX, paletteY, paletteSize, paletteSize)) {
                 dragMode = 1;
                 updatePalette(mouseX, mouseY);
@@ -245,14 +286,7 @@ public class ColorOption extends ClickGuiOption {
         int r = red(curr);
         int g = green(curr);
         int b = blue(curr);
-        float checkerSize = 3.0f * scale;
-        for (int cx = 0; cx < Math.ceil(alphaWidth / checkerSize); cx++) {
-            for (int cy = 0; cy < Math.ceil(alphaHeight / checkerSize); cy++) {
-                boolean dark = ((cx + cy) & 1) == 0;
-                Render2D.rect(alphaX + cx * checkerSize, alphaY + cy * checkerSize, checkerSize, checkerSize, 0,
-                        dark ? color(120, 120, 130, 255, popupAlpha) : color(200, 200, 210, 255, popupAlpha));
-            }
-        }
+        checker(alphaX, alphaY, alphaWidth, alphaHeight, popupAlpha);
         Render2D.gradientRect(alphaX, alphaY, (int) alphaWidth, alphaHeight, (int) (2.5f * scale),
                 color(r, g, b, 0, popupAlpha),
                 color(r, g, b, 255, popupAlpha),
@@ -295,7 +329,20 @@ public class ColorOption extends ClickGuiOption {
 
     private void syncSetting() {
         int color = currentRgb();
-        setting.setValue(new Color(red(color), green(color), blue(color), Math.round(alphaValue * 255.0f)));
+        Color value = new Color(red(color), green(color), blue(color), Math.round(alphaValue * 255.0f));
+        if (editSecondary) setting.setSecondary(value);
+        else setting.setValue(value);
+    }
+
+    private void checker(float x, float y, float w, float h, float opacity) {
+        float cell = 3f;
+        for (int cx = 0; cx * cell < w; cx++) {
+            for (int cy = 0; cy * cell < h; cy++) {
+                int shade = ((cx + cy) & 1) == 0 ? 95 : 170;
+                Render2D.rect(x + cx * cell, y + cy * cell, Math.min(cell, w - cx * cell),
+                        Math.min(cell, h - cy * cell), 0, color(shade, shade, shade, 255, opacity));
+            }
+        }
     }
 
     private boolean isPopupVisible() {

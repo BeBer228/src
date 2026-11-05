@@ -42,8 +42,8 @@ import java.util.Map;
  * </pre>
  */
 public final class ClickGuiPanel {
-    private static final float MAX_WIDTH = 660.0f;
-    private static final float MAX_HEIGHT = 410.0f;
+    private static final float MAX_WIDTH = 594.0f;
+    private static final float MAX_HEIGHT = 369.0f;
     private static final float RADIUS = 8.0f;
     private static final float TOP_BAR = 36.0f;
     private static final float HEADER = 40.0f;

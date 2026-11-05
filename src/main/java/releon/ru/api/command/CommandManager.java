@@ -72,6 +72,7 @@ public final class CommandManager {
 
     @SubscribeEvent
     private void onChat(ChatEvent event) {
+        if (releon.ru.api.module.impl.misc.NoCommand.blocksCommands()) return;
         String msg = event.getMessage();
         if (!msg.startsWith(prefix)) {
             return;
@@ -89,6 +90,7 @@ public final class CommandManager {
 
     @SubscribeEvent
     private void onTabComplete(TabCompleteEvent event) {
+        if (releon.ru.api.module.impl.misc.NoCommand.blocksCommands()) return;
         String eventPrefix = event.getPrefix();
         if (!eventPrefix.startsWith(prefix)) {
             return;

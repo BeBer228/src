@@ -18,17 +18,26 @@ import releon.ru.utils.render.ui.Render2D;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.Set;
 
+/**
+ * Горизонтальный список забинденных предметов: иконка, количество под ней,
+ * клавиша справа и тонкий разделитель между строками.
+ */
 public final class Binds extends HudPanel {
-    private static final int PER_ROW = 5;
-    private static final float CARD_WIDTH = 21.0F;
-    private static final float CARD_HEIGHT = 21.0F;
-    private static final float ROW_STEP = 24.0F;
-    private static final float CARD_GAP = 3.0F;
-    private static final float ITEM_SIZE = 10.0F;
+    private static final float ROW_HEIGHT = 20.0F;
+    private static final float ROW_GAP = 2.0F;
+    private static final float ICON_SIZE = 12.0F;
+    private static final float ROW_PAD = 5.0F;
+    private static final float KEY_PAD = 5.0F;
+    private static final float MIN_WIDTH = 82.0F;
+    private static final float COUNT_SIZE = 4.2F;
+    private static final float KEY_SIZE = 5.2F;
+    private static final String[] PREVIEW_KEYS = {"A", "B", "C"};
     private static final ItemStack[] PREVIEW_STACKS = {
             Items.ENDER_EYE.getDefaultInstance(),
             Items.SUGAR.getDefaultInstance(),
@@ -36,7 +45,6 @@ public final class Binds extends HudPanel {
     };
     private static final Map<String, String> SEARCH_NAMES = new HashMap<>();
     private static final Map<String, Integer> BIND_COLORS = new HashMap<>();
-    private static final Random RANDOM = new Random();
 
     static {
         SEARCH_NAMES.put("Зелье отрыжки", "отрыжки");
@@ -58,24 +66,12 @@ public final class Binds extends HudPanel {
         BIND_COLORS.put("Зелье киллера", 0xFF0000);
     }
 
-    private final SmoothAnimation panelAnimation = new SmoothAnimation();
     private final List<BindEntry> bindEntries = new ArrayList<>();
-    private final List<BindEntry> lastBinds = new ArrayList<>();
-    private boolean lastPreview;
-    private int lastCount;
-    private int lastRows = 1;
-    private float lastWidth = 22.0F;
-    private float lastHeight = ROW_STEP;
-    private long lastBindChange = 0L;
-    private String currentRandomKey1 = "None";
-    private String currentRandomKey2 = "None";
-    private String currentRandomKey3 = "None";
-    private int currentItemIndex1 = 0;
-    private int currentItemIndex2 = 1;
-    private int currentItemIndex3 = 2;
+    private final Map<String, SmoothAnimation> rowAnimations = new LinkedHashMap<>();
+    private List<BindEntry> lastBinds = List.of();
 
     public Binds() {
-        super("binds", "Binds", 10.0F, 180.0F, 48.0F, 18.0F);
+        super("binds", "Binds", 10.0F, 180.0F, MIN_WIDTH, ROW_HEIGHT);
     }
 
     @Override
@@ -90,173 +86,128 @@ public final class Binds extends HudPanel {
     private BindsState logics() {
         List<BindEntry> binds = hudBinds();
         boolean preview = binds.isEmpty() && editPreview();
-        boolean targetVisible = !binds.isEmpty() || preview;
-
-        updatePreviewAnimation(binds, preview);
-
-        if (targetVisible) {
-            rememberLayout(binds, preview);
-        }
-
-        panelAnimation.update();
-        panelAnimation.run(targetVisible ? 1.0 : 0.0, 0.24F, targetVisible ? Easings.EXPO_OUT : Easings.EXPO_IN, true);
-        float alpha = panelAnimation.get();
-        boolean fading = !targetVisible && lastCount > 0 && (alpha > 0.01F || panelAnimation.isAlive());
-        boolean renderVisible = targetVisible || fading;
-        contentVisible(renderVisible);
-        if (!renderVisible) {
+        boolean visible = !binds.isEmpty() || preview;
+        float alpha = contentAlpha(visible);
+        if (alpha <= 0.001F) {
             return null;
         }
 
-        List<BindEntry> renderBinds = targetVisible ? binds : lastBinds;
-        boolean renderPreview = targetVisible ? preview : lastPreview;
-        int count = targetVisible ? (preview ? PREVIEW_STACKS.length : binds.size()) : lastCount;
-        int rows = targetVisible ? Math.max(1, (int) Math.ceil(count / (double) PER_ROW)) : lastRows;
-        float width = targetVisible ? layoutWidth(binds, preview, count, rows) : lastWidth;
-        float height = targetVisible ? rows * ROW_STEP : lastHeight;
-        sizeInstant(width, height);
-
-        return new BindsState(renderBinds, renderPreview, count, rows, alpha, drag.x(), drag.y(), drag.width());
-    }
-
-    private void updatePreviewAnimation(List<BindEntry> binds, boolean preview) {
-        long currentTime = System.currentTimeMillis();
-        if (binds.isEmpty() && preview && currentTime - lastBindChange >= 1000L) {
-            String[] availableKeys = {"A", "B", "C", "D", "E"};
-            currentRandomKey1 = availableKeys[RANDOM.nextInt(availableKeys.length)];
-            currentRandomKey2 = availableKeys[RANDOM.nextInt(availableKeys.length)];
-            currentRandomKey3 = availableKeys[RANDOM.nextInt(availableKeys.length)];
-            currentItemIndex1 = (currentItemIndex1 + 1) % PREVIEW_STACKS.length;
-            currentItemIndex2 = (currentItemIndex2 + 1) % PREVIEW_STACKS.length;
-            currentItemIndex3 = (currentItemIndex3 + 1) % PREVIEW_STACKS.length;
-            lastBindChange = currentTime;
+        List<BindEntry> render = visible ? (preview ? previewEntries() : binds) : lastBinds;
+        if (visible) {
+            lastBinds = new ArrayList<>(render);
         }
-    }
-
-    private void rememberLayout(List<BindEntry> binds, boolean preview) {
-        int count = preview ? PREVIEW_STACKS.length : binds.size();
-        int rows = Math.max(1, (int) Math.ceil(count / (double) PER_ROW));
-        float width = layoutWidth(binds, preview, count, rows);
-
-        lastBinds.clear();
-        if (!preview) {
-            lastBinds.addAll(binds);
+        if (render.isEmpty()) {
+            return null;
         }
-        lastPreview = preview;
-        lastCount = count;
-        lastRows = rows;
-        lastWidth = width;
-        lastHeight = rows * ROW_STEP;
+
+        updateRowAnimations(render);
+
+        float width = MIN_WIDTH;
+        for (BindEntry entry : render) {
+            width = Math.max(width, rowWidth(entry));
+        }
+        float height = render.size() * ROW_HEIGHT + (render.size() - 1) * ROW_GAP;
+        size(width, height);
+
+        return new BindsState(render, preview, alpha, drag.x(), drag.y(), drag.width(), drag.height());
     }
 
-    private float layoutWidth(List<BindEntry> binds, boolean preview, int count, int rows) {
-        float width = 0.0F;
-        for (int row = 0; row < rows; row++) {
-            int start = row * PER_ROW;
-            int end = Math.min(count, start + PER_ROW);
-            float rowWidth = 0.0F;
-            for (int i = start; i < end; i++) {
-                rowWidth += cardWidth();
-                if (i + 1 < end) {
-                    rowWidth += CARD_GAP;
-                }
+    private void updateRowAnimations(List<BindEntry> entries) {
+        Set<String> present = new HashSet<>();
+        for (BindEntry entry : entries) {
+            present.add(entry.id());
+            SmoothAnimation animation = rowAnimations.get(entry.id());
+            if (animation == null) {
+                animation = new SmoothAnimation();
+                animation.set(0.0);
+                rowAnimations.put(entry.id(), animation);
             }
-            width = Math.max(width, rowWidth);
+            animation.update();
+            animation.run(1.0, 0.22, Easings.EXPO_OUT, true);
         }
-        return Math.max(22.0F, width + 6.0F);
+
+        for (Map.Entry<String, SmoothAnimation> entry : rowAnimations.entrySet()) {
+            if (present.contains(entry.getKey())) {
+                continue;
+            }
+            SmoothAnimation animation = entry.getValue();
+            animation.update();
+            animation.run(0.0, 0.16, Easings.EXPO_IN, true);
+        }
+        rowAnimations.entrySet().removeIf(entry ->
+                !present.contains(entry.getKey()) && entry.getValue().get() <= 0.01F);
     }
 
-    private void sizeInstant(float width, float height) {
-        drag.size((float) Math.ceil(width), (float) Math.ceil(height));
-        drag.clamp(ElementScreen.current());
+    private float rowWidth(BindEntry entry) {
+        float keyWidth = Render2D.textWidth(HudStyle.NUM, entry.key(), KEY_SIZE);
+        return ROW_PAD + ICON_SIZE + 8.0F + keyWidth + KEY_PAD + ROW_PAD;
     }
 
     private void renderBinds(BindsState state) {
-        int index = 0;
-        for (int row = 0; row < state.rows; row++) {
-            int start = row * PER_ROW;
-            int end = Math.min(state.count, start + PER_ROW);
-            float rowWidth = 0.0F;
-            for (int i = start; i < end; i++) {
-                rowWidth += cardWidth();
-                if (i + 1 < end) {
-                    rowWidth += CARD_GAP;
-                }
+        float rowY = state.y;
+        for (int index = 0; index < state.binds.size(); index++) {
+            BindEntry entry = state.binds.get(index);
+            SmoothAnimation animation = rowAnimations.get(entry.id());
+            float progress = animation == null ? 1.0F : animation.get();
+            float rowAlpha = state.alpha * progress;
+            if (rowAlpha > 0.001F) {
+                renderRow(state.x + (1.0F - progress) * -7.0F, rowY, state.width, entry, rowAlpha,
+                        index < state.binds.size() - 1);
             }
-
-            float cardX = state.x + (state.width - rowWidth) * 0.5F;
-            float cardY = state.y + row * ROW_STEP + 1.5F;
-            for (int i = start; i < end && index < state.count; i++) {
-                ItemStack stack;
-                String key;
-                int itemCount;
-                float cooldownProgress;
-
-                if (state.preview) {
-                    if (index == 0) {
-                        stack = PREVIEW_STACKS[currentItemIndex1];
-                        key = currentRandomKey1;
-                    } else if (index == 1) {
-                        stack = PREVIEW_STACKS[currentItemIndex2];
-                        key = currentRandomKey2;
-                    } else {
-                        stack = PREVIEW_STACKS[currentItemIndex3];
-                        key = currentRandomKey3;
-                    }
-                    itemCount = 64;
-                    cooldownProgress = 0.0F;
-                } else {
-                    BindEntry bind = state.binds.get(index);
-                    stack = bind.stack();
-                    key = shortBind(bind.bind());
-                    itemCount = bind.inventoryCount();
-                    cooldownProgress = bind.cooldownProgress();
-                }
-
-                float cw = cardWidth();
-                boolean hasStack = stack != null && !stack.isEmpty();
-                String countText = itemCount > 99 ? "99+" : Integer.toString(Math.max(0, itemCount));
-                float progress = clamp(cooldownProgress, 0.0F, 1.0F);
-                float alpha = state.alpha;
-                boolean empty = !state.preview && itemCount <= 0;
-
-                HudStyle.glass(cardX, cardY, cw, CARD_HEIGHT, 4.0F, alpha);
-                if (progress <= 0.0F && !empty) {
-                    Render2D.gradientRect(cardX, cardY, cw, CARD_HEIGHT, 4.0F, 4.0F, 4.0F, 4.0F,
-                            HudStyle.accent(30.0F, alpha), HudStyle.accent2(16.0F, alpha),
-                            HudStyle.accent2(16.0F, alpha), HudStyle.accent(30.0F, alpha));
-                }
-
-                float itemX = cardX + (cw - ITEM_SIZE) * 0.5F;
-                float itemY = cardY + 2.5F;
-                if (hasStack) {
-                    RenderItem.item(stack, itemX, itemY, ITEM_SIZE, RenderItemOptions.noDecorations(empty ? alpha * 0.4F : alpha));
-                }
-
-                // кулдаун: затемнение сверху вниз + акцентная кромка
-                if (progress > 0.0F) {
-                    float overlayHeight = CARD_HEIGHT * progress;
-                    float oy = cardY + CARD_HEIGHT - overlayHeight;
-                    Render2D.rect(cardX, oy, cw, overlayHeight, 4.0F, HudStyle.glassColor(165.0F, alpha));
-                    Render2D.rect(cardX + 2.0F, oy, cw - 4.0F, 0.7F, 0.35F, HudStyle.accent(230.0F, alpha));
-                }
-
-                // счётчик (правый верхний угол)
-                int countColor = empty ? HudStyle.bad(255.0F, alpha) : HudStyle.white(235.0F, alpha);
-                HudStyle.textRight(HudStyle.NUM, countText, cardX + cw - 1.8F, cardY + 1.6F, 4.2F, countColor);
-
-                // клавиша (снизу по центру)
-                String visibleKey = trimToWidth(key, HudStyle.NUM, 4.5F, cw - 4.0F);
-                float keyW = Render2D.textWidth(HudStyle.NUM, visibleKey, 4.5F) + 4.0F;
-                float keyX = cardX + (cw - keyW) * 0.5F;
-                float keyY = cardY + CARD_HEIGHT - 7.0F;
-                Render2D.rect(keyX, keyY, keyW, 6.0F, 2.0F, HudStyle.white(22.0F, alpha));
-                Render2D.text(HudStyle.NUM, visibleKey, keyX + 2.0F, keyY + 0.8F, 4.5F, HudStyle.text(alpha));
-
-                cardX += cw + CARD_GAP;
-                index++;
-            }
+            rowY += ROW_HEIGHT + ROW_GAP;
         }
+    }
+
+    private void renderRow(float x, float y, float width, BindEntry entry, float alpha, boolean divider) {
+        ItemStack stack = entry.stack();
+        boolean hasStack = stack != null && !stack.isEmpty();
+        int cooldownSeconds = entry.cooldownTicks() <= 0
+                ? 0
+                : Math.max(1, (int) Math.ceil(entry.cooldownTicks() / 20.0D));
+        boolean cooling = cooldownSeconds > 0;
+        boolean empty = entry.inventoryCount() <= 0;
+
+        float iconX = x + ROW_PAD;
+        float iconY = y + 2.0F;
+        float iconAlpha = cooling ? alpha * 0.45F : empty ? alpha * 0.4F : alpha;
+        if (hasStack) {
+            RenderItem.item(stack, iconX, iconY, ICON_SIZE, RenderItemOptions.noDecorations(iconAlpha));
+        }
+
+        String countText;
+        int countColor;
+        if (cooling) {
+            countText = cooldownSeconds + "с";
+            countColor = HudStyle.gold(255.0F, alpha);
+        } else {
+            int count = Math.max(0, entry.inventoryCount());
+            countText = count > 99 ? "99+" : Integer.toString(count);
+            countColor = empty ? HudStyle.bad(255.0F, alpha) : HudStyle.white(238.0F, alpha);
+        }
+        HudStyle.textCentered(HudStyle.NUM, countText, iconX + ICON_SIZE * 0.5F,
+                iconY + ICON_SIZE + 1.4F, COUNT_SIZE, countColor);
+
+        String key = trimToWidth(entry.key(), HudStyle.NUM, KEY_SIZE, width - ICON_SIZE - 20.0F);
+        float keyWidth = Render2D.textWidth(HudStyle.NUM, key, KEY_SIZE);
+        float keyX = x + width - KEY_PAD - keyWidth;
+        float keyY = y + (ROW_HEIGHT - KEY_SIZE) * 0.5F - 0.4F;
+        Render2D.rect(keyX - 3.0F, keyY - 1.6F, keyWidth + 6.0F, KEY_SIZE + 3.2F, 2.0F,
+                HudStyle.white(cooling ? 8.0F : 16.0F, alpha));
+        Render2D.text(HudStyle.NUM, key, keyX, keyY, KEY_SIZE,
+                cooling ? HudStyle.muted(alpha) : HudStyle.text(alpha));
+
+        if (divider) {
+            HudStyle.divider(x + ROW_PAD + 1.0F, y + ROW_HEIGHT + ROW_GAP * 0.5F,
+                    width - (ROW_PAD + 1.0F) * 2.0F, alpha);
+        }
+    }
+
+    private List<BindEntry> previewEntries() {
+        List<BindEntry> entries = new ArrayList<>(PREVIEW_STACKS.length);
+        for (int i = 0; i < PREVIEW_STACKS.length; i++) {
+            entries.add(new BindEntry("preview_" + i, PREVIEW_STACKS[i], PREVIEW_KEYS[i], 64, 0));
+        }
+        return entries;
     }
 
     private List<BindEntry> hudBinds() {
@@ -290,7 +241,8 @@ public final class Binds extends HudPanel {
                 stack = createColoredPotion(color);
             }
 
-            bindEntries.add(new BindEntry(stack, bind == null ? KeyBind.NONE : bind, hudBind.inventoryCount(), hudBind.cooldownProgress()));
+            String key = bind == null || !bind.isBound() ? "None" : shortBind(bind);
+            bindEntries.add(new BindEntry(hudBind.key(), stack, key, hudBind.inventoryCount(), hudBind.cooldownTicks()));
         }
         return bindEntries;
     }
@@ -307,13 +259,10 @@ public final class Binds extends HudPanel {
         return stack;
     }
 
-    private float cardWidth() {
-        return CARD_WIDTH;
+    private record BindEntry(String id, ItemStack stack, String key, int inventoryCount, int cooldownTicks) {
     }
 
-    private record BindEntry(ItemStack stack, KeyBind bind, int inventoryCount, float cooldownProgress) {
-    }
-
-    private record BindsState(List<BindEntry> binds, boolean preview, int count, int rows, float alpha, float x, float y, float width) {
+    private record BindsState(List<BindEntry> binds, boolean preview, float alpha,
+                              float x, float y, float width, float height) {
     }
 }

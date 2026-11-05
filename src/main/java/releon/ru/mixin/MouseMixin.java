@@ -35,6 +35,7 @@ public class MouseMixin {
     @Inject(method = "onButton", at = @At("HEAD"))
     private void releon$onMouseButton(long window, MouseButtonInfo buttonInfo, int action, CallbackInfo ci) {
         int button = buttonInfo.button();
+        releon.ru.api.module.impl.visual.hudmodern.NewHudInput.record(button, action);
         if (button != GLFW.GLFW_KEY_UNKNOWN && window == minecraft.getWindow().handle()) {
             if (minecraft.screen == null) {
                 Manager.postEvent(new KeyEvent(minecraft.screen, InputConstants.Type.MOUSE, button, action));

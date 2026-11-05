@@ -63,7 +63,17 @@ public abstract class MixinItemEntityRenderer {
                 matrices.mulPose(Axis.XP.rotationDegrees((age * 15.0F + offset * 360.0F) % 360.0F));
             }
         }
+        float scale = releon$itemScale();
+        if (scale != 1.0F) {
+            matrices.scale(scale, scale, scale);
+        }
         ItemEntityRenderer.submitMultipleFromCount(matrices, submitNodeCollector, light, stackState, random, box);
+    }
+
+    @Unique
+    private static float releon$itemScale() {
+        ItemPhysics itemPhysics = ItemPhysics.getInstance();
+        return itemPhysics != null && itemPhysics.isEnabled() ? itemPhysics.scale() : 1.0F;
     }
 
     @Unique

@@ -18,10 +18,11 @@ import releon.ru.utils.inventory.interaction.PlayerInteractionHelper;
 import releon.ru.utils.inventory.script.Script;
 
 public final class NoSlow extends Module {
-    private final ModeSetting itemMode = register(new ModeSetting("Item Mode", "Item slowdown bypass mode.", "ReallyWorld", "Old Grim", "ReallyWorld", "FunTime", "SpookyTime", "FunTimeCrossBow"));
+    private final ModeSetting itemMode = register(new ModeSetting("Item Mode", "Item slowdown bypass mode.", "Grim Ticks", "Vanilla", "Grim Ticks", "Crossbow", "Old Grim", "ReallyWorld", "FunTime", "SpookyTime", "FunTimeCrossBow"));
     private final Script script = new Script();
     private int ticks;
     private int cycleCounter;
+    private int grimTicks;
     private boolean forcedSprintDuringEat;
     private boolean sprintWasPressedBeforeEat;
 
@@ -32,6 +33,7 @@ public final class NoSlow extends Module {
     @Override
     protected void onDisable() {
         resetEatSprintBoostIfNeeded();
+        grimTicks = 0;
         ticks = 0;
         cycleCounter = 0;
         script.cleanup();
@@ -44,6 +46,7 @@ public final class NoSlow extends Module {
             return;
         }
 
+        grimTicks = client.player.isUsingItem() ? grimTicks + 1 : 0;
         if (itemMode.is("ReallyWorld") || itemMode.is("SpookyTime")) {
             if (!client.player.isAutoSpinAttack()) {
                 if (client.player.isUsingItem()) {
@@ -83,6 +86,15 @@ public final class NoSlow extends Module {
     }
 
     private void handleItemUse(Minecraft client, UsingItemEvent event, InteractionHand first, InteractionHand second) {
+        if (itemMode.is("Vanilla")) { event.setCancelled(true); return; }
+        if (itemMode.is("Crossbow")) {
+            if (client.player.getMainHandItem().getItem() instanceof CrossbowItem) event.setCancelled(true);
+            return;
+        }
+        if (itemMode.is("Grim Ticks")) {
+            if (grimTicks >= 3) { event.setCancelled(true); grimTicks = 0; }
+            return;
+        }
         if (itemMode.is("Old Grim")) {
             if (client.player.getOffhandItem().getUseAnimation() == ItemUseAnimation.NONE
                     || client.player.getMainHandItem().getUseAnimation() == ItemUseAnimation.NONE) {

@@ -379,8 +379,15 @@ public class MainScreen extends Screen {
 
             float is = 10.0F;
             float ix = gx + 11.0F;
-            Render2D.text(FontType.GUI_ICONS, icon, ix, gy + (gh - is) * 0.5F, is,
-                    rgba(255, 255, 255, (int) ((180 + 70 * hover) * a)));
+            if (index == 2) {
+                float tx = ix - 1, ty = gy + gh * .5f - 3.5f;
+                Render2D.rect(tx, ty, 14, 7, 3.5f, rgba(255, 255, 255, (int) ((55 + 55 * hover) * a)));
+                Render2D.rect(tx + 1.2f + easeOut(hover) * 7, ty + 1.2f, 4.6f, 4.6f, 2.3f,
+                        rgba(255, 255, 255, (int) (235 * a)));
+            } else {
+                Render2D.text(FontType.GUI_ICONS, icon, ix, gy + (gh - is) * 0.5F, is,
+                        rgba(255, 255, 255, (int) ((180 + 70 * hover) * a)));
+            }
             float ts = 7.5F;
             Render2D.text(FontType.SEMIBOLD, label, ix + is + 8.0F + hover * 2.0F, gy + (gh - ts) * 0.5F, ts,
                     rgba(255, 255, 255, (int) ((205 + 45 * hover) * a)));

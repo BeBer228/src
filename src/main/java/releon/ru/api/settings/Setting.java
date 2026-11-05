@@ -67,6 +67,11 @@ public abstract class Setting<T> {
         return this;
     }
 
+    public final void visibleAlso(BooleanSupplier condition) {
+        BooleanSupplier previous = visible;
+        visible = () -> previous.getAsBoolean() && condition.getAsBoolean();
+    }
+
     public Setting<T> visible(BooleanSupplier visible) {
         return visibleWhen(visible);
     }
@@ -107,7 +112,7 @@ public abstract class Setting<T> {
         return value;
     }
 
-    private void notifyListeners(T oldValue, T newValue) {
+    protected final void notifyListeners(T oldValue, T newValue) {
         for (SettingChangeListener<T> listener : listeners) {
             listener.onChanged(this, oldValue, newValue);
         }

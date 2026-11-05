@@ -5,6 +5,9 @@ import java.util.Locale;
 import java.util.Map;
 
 public enum FontType {
+    MANROPE("manrope", "manrope"),
+    MANROPE_BOLD("manrope_bold", "manrope_bold"),
+    NEW_HUD_ICONS("new_hud_icons", "new_hud_icons"),
     SEMIBOLD("semibold", "semibold"),
     SEMI_BOLD("semi-bold", "semi-bold"),
     BOLD("bold", "bold"),

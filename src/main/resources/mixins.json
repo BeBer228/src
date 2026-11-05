@@ -67,7 +67,16 @@
     "accessor.MinecraftAccessor",
     "accessor.MixinRenderPipelines",
     "accessor.MixinRenderType",
-    "accessor.MultiPlayerGameModeAccessor"
+    "accessor.MultiPlayerGameModeAccessor",
+    "ShaderSkyMixin",
+    "CosmeticsItemModelMixin",
+    "CosmeticsAvatarStateMixin",
+    "CosmeticsAvatarRendererMixin",
+    "BeautificationScreenMixin",
+    "BeautificationTabMixin",
+    "BeautificationChatMixin",
+    "BeautificationGuiMixin",
+    "BeautificationCameraMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -105,6 +105,9 @@ final class FontManager implements AutoCloseable {
         register("icons", icons);
         register("icon", icons);
 
+        register(FontType.MANROPE, loadFont("manrope_medium.ttf", semiBold));
+        register(FontType.MANROPE_BOLD, loadFont("manrope_semibold.ttf", bold));
+        register(FontType.NEW_HUD_ICONS, loadFont("new_hud_icons.ttf", icons));
         register(FontType.SEMIBOLD, semiBold);
         register(FontType.SEMI_BOLD, semiBold);
         register(FontType.BOLD, bold);

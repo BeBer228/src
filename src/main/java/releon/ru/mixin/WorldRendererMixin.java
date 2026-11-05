@@ -196,10 +196,15 @@ public class WorldRendererMixin implements IMinecraft {
         }
 
         // 2. шейдерный ESP (маска = ванильный entity outline буфер)
-        if (entityOutlineTarget != null && ESP.hasShaderGlowTargets() && !EspGlowRenderer.isDisabledAfterError()) {
+        if (entityOutlineTarget != null && !releon.ru.api.module.impl.visual.ShaderEsp.replacesOutline() && ESP.hasShaderGlowTargets() && !EspGlowRenderer.isDisabledAfterError()) {
             EspGlowRenderer.render(target, entityOutlineTarget.get(),
                     ESP.glowRadiusValue(), ESP.glowFillValue(),
                     ESP.glowPrimaryColor(), ESP.glowSecondaryColor());
+        }
+
+        var includeEsp = releon.ru.api.module.impl.visual.ShaderEsp.getInstance();
+        if (entityOutlineTarget != null && includeEsp != null && includeEsp.isEnabled()) {
+            includeEsp.render(target, entityOutlineTarget.get(), minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false));
         }
 
         // 3. цветокоррекция мира

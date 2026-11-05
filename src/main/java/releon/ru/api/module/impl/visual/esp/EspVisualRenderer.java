@@ -28,6 +28,10 @@ public final class EspVisualRenderer {
     public record ItemTagRow(ItemStack stack, String name, int count) {
     }
 
+    /** One held-item line rendered in the same tag style/font as player tags. */
+    public record HeldItemTag(String name, String suffix, int suffixColor) {
+    }
+
     public static void draw2DBox(EspGeometry.ScreenBox box, int color, float alpha) {
         float x = roundHalf((float) box.minX());
         float y = roundHalf((float) box.minY());
@@ -164,6 +168,54 @@ public final class EspVisualRenderer {
             float rowCountWidth = Render2D.textWidth(FontType.SEMIBOLD, count, textSize);
             Render2D.text(FontType.SEMIBOLD, count, x + width - paddingX - rowCountWidth, textY, textSize,
                     ColorUtil.rgba(165, 165, 165, Math.round(245.0F * alpha)));
+            rowY += rowHeight;
+        }
+    }
+
+    /**
+     * Held-item labels below the player's feet, rendered with the same tag font and rounded
+     * black plate as the player name tags instead of the vanilla bitmap font.
+     */
+    public static void drawHeldItemTags(List<HeldItemTag> rows, double anchorX, double anchorY,
+                                        float alpha, boolean background) {
+        if (rows == null || rows.isEmpty() || alpha <= 0.01F) {
+            return;
+        }
+
+        float textSize = 6.0F;
+        float paddingX = 3.2F;
+        float paddingY = 1.8F;
+        float rowHeight = Math.max(9.0F, textSize + 3.4F);
+        float suffixGap = 1.6F;
+
+        float nameWidth = 0.0F;
+        float suffixWidth = 0.0F;
+        for (HeldItemTag row : rows) {
+            nameWidth = Math.max(nameWidth, Render2D.textWidth(FontType.SEMIBOLD, row.name(), textSize));
+            if (row.suffix() != null && !row.suffix().isEmpty()) {
+                suffixWidth = Math.max(suffixWidth, Render2D.textWidth(FontType.SEMIBOLD, row.suffix(), textSize));
+            }
+        }
+
+        float width = paddingX * 2.0F + nameWidth + (suffixWidth > 0.0F ? suffixGap + suffixWidth : 0.0F);
+        float height = paddingY * 2.0F + rows.size() * rowHeight + 1.0F;
+        float x = (float) anchorX - width * 0.5F;
+        float y = (float) anchorY + 1.0F;
+
+        if (background) {
+            Render2D.rect(x - 1.0F, y, width + 2.0F, height + 2.0F, 3.0F,
+                    ColorUtil.rgba(0, 0, 0, Math.round(185.0F * alpha)));
+        }
+
+        float rowY = y + paddingY + 0.5F;
+        for (HeldItemTag row : rows) {
+            float textY = rowY + (rowHeight - textSize) * 0.5F - 0.75F;
+            Render2D.text(FontType.SEMIBOLD, row.name(), x + paddingX, textY, textSize,
+                    ColorUtil.multAlpha(EspColors.TAG_TEXT, alpha));
+            if (row.suffix() != null && !row.suffix().isEmpty()) {
+                Render2D.text(FontType.SEMIBOLD, row.suffix(), x + paddingX + nameWidth + suffixGap, textY,
+                        textSize, ColorUtil.multAlpha(row.suffixColor(), alpha));
+            }
             rowY += rowHeight;
         }
     }

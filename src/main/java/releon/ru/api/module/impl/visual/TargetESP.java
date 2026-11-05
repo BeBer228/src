@@ -22,6 +22,8 @@ import releon.ru.utils.render.world.targetesp.*;
 import java.awt.Color;
 
 public class TargetESP extends Module {
+    private final ModeSetting style = register(new ModeSetting("Style", "Набор эффектов цели.", "New", "Base", "New"));
+    private final PVPVisual modern = new PVPVisual();
     private static TargetESP instance;
 
     private final SmoothAnimation alphaAnimation = new SmoothAnimation();
@@ -45,6 +47,12 @@ public class TargetESP extends Module {
         alphaAnimation.set(0.0);
         color1.visibleWhen(() -> !themeColors.getValue());
         color2.visibleWhen(() -> !themeColors.getValue());
+        for (var setting : getSettings()) if (setting != style) setting.visibleAlso(() -> style.is("Base"));
+        for (var setting : modern.getSettings()) {
+            setting.visibleAlso(() -> style.is("New"));
+            register(setting);
+        }
+        style.addListener((setting, old, value) -> { resetRenderState(); modern.onDisable(); });
     }
 
     public static TargetESP getInstance() {
@@ -53,7 +61,18 @@ public class TargetESP extends Module {
 
     @Override
     protected void onDisable() {
+        modern.onDisable();
         resetRenderState();
+    }
+
+    @Override public void onTick(net.minecraft.client.Minecraft client) {
+        if (style.is("New")) modern.onTick(client);
+    }
+    @SubscribeEvent private void onAttack(releon.ru.api.events.impl.AttackEvent event) {
+        if (style.is("New")) modern.onAttack(event);
+    }
+    @SubscribeEvent private void onPacket(releon.ru.api.events.impl.PacketEvent event) {
+        if (style.is("New")) modern.onPacket(event);
     }
 
     private void resetRenderState() {
@@ -76,6 +95,7 @@ public class TargetESP extends Module {
 
     @SubscribeEvent
     private void onRender3D(WorldRenderEvent event) {
+        if (style.is("New")) { modern.onRender3D(event); return; }
         if (mc.level == null || mc.player == null) {
             resetRenderState();
             return;

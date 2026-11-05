@@ -102,6 +102,10 @@ public final class ServerHelper extends Module {
     private final BooleanSetting autoPointSetting = register(new BooleanSetting("Авто поинт", "Отображает информацию об ивенте.", true));
     private final ColorSetting boxFillColor = register(new ColorSetting("Цвет заливки", "Цвет заливки бокса.", new Color(130, 32, 16, 40)));
     private final ColorSetting boxLineColor = register(new ColorSetting("Цвет линий", "Цвет линий бокса.", new Color(130, 32, 16, 255)));
+    private final BooleanSetting structureHudSetting = register(new BooleanSetting("HUD структур", "Карточки таймеров трапок и пластов.", true));
+    private final BooleanSetting structureTagsSetting = register(new BooleanSetting("Метки структур", "Название, время и полоса прогресса над конструкцией.", true));
+    private final NumberSetting structureRangeSetting = register(new NumberSetting("Дальность меток", "Максимальная дистанция меток структур.", 96.0, 16.0, 192.0, 4.0));
+    private final NumberSetting structureScaleSetting = register(new NumberSetting("Масштаб меток", "Размер меток структур в мире.", 1.0, 0.5, 2.5, 0.05));
 
     private final List<KeyBindingEntry> keyBindings = new ArrayList<>();
     private final Map<String, ItemInfo> itemConfig = new HashMap<>();
@@ -146,6 +150,10 @@ public final class ServerHelper extends Module {
         consumablesSetting.visibleWhen(() -> mode.is("SpookyTime"));
         trapTimeSetting.visibleWhen(() -> mode.is("SpookyTime") && consumablesSetting.getValue());
         plastTimeSetting.visibleWhen(() -> mode.is("SpookyTime") && consumablesSetting.getValue());
+        structureHudSetting.visibleWhen(() -> mode.is("SpookyTime"));
+        structureTagsSetting.visibleWhen(() -> mode.is("SpookyTime"));
+        structureRangeSetting.visibleWhen(() -> mode.is("SpookyTime") && structureTagsSetting.getValue());
+        structureScaleSetting.visibleWhen(() -> mode.is("SpookyTime") && structureTagsSetting.getValue());
         SpookyTimeAhSearchBind.visibleWhen(() -> mode.is("SpookyTime"));
         autoPointSetting.visibleWhen(() -> mode.is("SpookyTime"));
         boxFillColor.visibleWhen(() -> mode.is("SpookyTime"));
@@ -261,8 +269,9 @@ public final class ServerHelper extends Module {
             float cooldown = stack.isEmpty() || !mc.player.getCooldowns().isOnCooldown(stack)
                     ? 0.0F
                     : mc.player.getCooldowns().getCooldownPercent(stack, tickDelta);
+            int cooldownTicks = cooldown <= 0.0F ? 0 : Math.max(1, cooldownRemainingTicks(stack));
             String displayName = info == null ? stack.getHoverName().getString() : info.displayName;
-            binds.add(new HudBind(bind.key, bind.item, bind.setting, stack, count, cooldown, displayName));
+            binds.add(new HudBind(bind.key, bind.item, bind.setting, stack, count, cooldown, cooldownTicks, displayName));
         }
         return binds;
     }
@@ -285,6 +294,47 @@ public final class ServerHelper extends Module {
             events.add(new HudEvent(event.name, event.lvl, event.owner, timer, distance));
         }
         return events;
+    }
+
+    public List<HudStructure> getHudStructures() {
+        if (mc.player == null || mc.level == null) {
+            return List.of();
+        }
+
+        long now = System.currentTimeMillis();
+        List<HudStructure> result = new ArrayList<>();
+        synchronized (structures) {
+            for (Structure structure : structures) {
+                if (structure.anarchy != Network.getAnarchyMode() || !matchesWorld(structure.world)) {
+                    continue;
+                }
+                double remaining = (structure.time - now) / 1000.0D;
+                if (remaining <= 0.0D) {
+                    continue;
+                }
+                double duration = Math.max(0.001D, structure.duration);
+                result.add(new HudStructure(structure.label, structure.item.getDefaultInstance(), remaining,
+                        (float) Math.min(1.0D, remaining / duration)));
+            }
+        }
+        result.sort((a, b) -> Double.compare(a.remainingSeconds(), b.remainingSeconds()));
+        return result;
+    }
+
+    public boolean structureHudEnabled() {
+        return structureHudSetting.getValue();
+    }
+
+    public boolean structureTagsEnabled() {
+        return structureTagsSetting.getValue();
+    }
+
+    public double structureTagRange() {
+        return structureRangeSetting.getValue();
+    }
+
+    public float structureTagScale() {
+        return structureScaleSetting.getFloat();
     }
 
     @Override
@@ -420,9 +470,23 @@ public final class ServerHelper extends Module {
         GuiGraphics graphics = event.getGraphics();
         flushBlockChanges();
 
+        boolean structureTags = structureTagsEnabled();
+        double structureRange = structureTagRange();
+        float structureScale = structureTagScale();
+        long now = System.currentTimeMillis();
+
         List<Structure> structuresCopy = new ArrayList<>(structures);
         for (Structure structure : structuresCopy) {
             if (structure.anarchy != Network.getAnarchyMode() || !matchesWorld(structure.world)) {
+                continue;
+            }
+
+            double remaining = (structure.time - now) / 1000.0D;
+            if (remaining <= 0.0D) {
+                continue;
+            }
+            double distance = Math.sqrt(mc.player.distanceToSqr(structure.vec.x, structure.vec.y, structure.vec.z));
+            if (!structureTags || distance > structureRange) {
                 continue;
             }
 
@@ -431,9 +495,10 @@ public final class ServerHelper extends Module {
                 continue;
             }
 
-            String text = formatSeconds((structure.time - System.currentTimeMillis()) / 1000.0);
-            graphics.renderItem(structure.item.getDefaultInstance(), (int) screen.x - 8, (int) screen.y - 18);
-            graphics.drawString(mc.font, text, (int) screen.x - mc.font.width(text) / 2, (int) screen.y, 0xFFFFFFFF, true);
+            float scale = structureScale * (float) Math.max(0.62D, Math.min(1.0D, 12.0D / Math.max(1.0D, distance)));
+            double duration = Math.max(0.001D, structure.duration);
+            float ratio = (float) Math.max(0.0D, Math.min(1.0D, remaining / duration));
+            renderStructureTag(graphics, structure, screen, remaining, ratio, scale);
         }
 
         List<ServerEventData> eventsCopy = new ArrayList<>(serverEvents);
@@ -1240,11 +1305,7 @@ public final class ServerHelper extends Module {
         }
     }
 
-    private void addStructure(Item item, Vec3 vec, double time) {
-        addStructure(item, vec, time, 2.5F);
-    }
-
-    private void addStructure(Item item, Vec3 vec, double time, float half) {
+    private void addStructure(Item item, Vec3 vec, double time, float half, double duration, String label) {
         synchronized (structures) {
             for (Structure structure : structures) {
                 if (structure.vec.distanceTo(vec) < 2.5D) {
@@ -1252,7 +1313,7 @@ public final class ServerHelper extends Module {
                 }
             }
             structures.add(new Structure(item, vec, currentWorldToken(), Network.getAnarchyMode(), time,
-                    System.currentTimeMillis(), half));
+                    System.currentTimeMillis(), half, duration, label));
         }
     }
 
@@ -1362,13 +1423,16 @@ public final class ServerHelper extends Module {
         if (small >= 4 && group.size() >= 20) {
             // клетка-трапка (5x5x5), большая — 7x7x7
             double seconds = (double) trapTimeSetting.getValue();
-            if (big >= 6) {
+            boolean bigTrap = big >= 6;
+            if (bigTrap) {
                 seconds *= 2.0D;
             }
-            addStructure(Items.NETHERITE_SCRAP, center, now + seconds * 1000.0D, half);
+            addStructure(Items.NETHERITE_SCRAP, center, now + seconds * 1000.0D, half, seconds,
+                    bigTrap ? "Большая трапка" : "Трапка");
         } else if (small <= 2 && mid >= 3 && group.size() >= 8) {
             // стена / пол — пласт
-            addStructure(Items.DRIED_KELP, center, now + (double) plastTimeSetting.getValue() * 1000.0D, half);
+            double seconds = (double) plastTimeSetting.getValue();
+            addStructure(Items.DRIED_KELP, center, now + seconds * 1000.0D, half, seconds, "Пласт");
         }
     }
 
@@ -1439,6 +1503,54 @@ public final class ServerHelper extends Module {
             }
         }
         return true;
+    }
+
+    private void renderStructureTag(GuiGraphics graphics, Structure structure, Vec3 screen,
+                                    double remaining, float ratio, float scale) {
+        String label = structure.label == null ? "Структура" : structure.label;
+        String timer = formatSeconds(remaining);
+        float width = Math.max(70.0F, mc.font.width(label) + 46.0F);
+        float height = 21.0F;
+
+        graphics.pose().pushMatrix();
+        try {
+            graphics.pose().translate((float) screen.x, (float) screen.y);
+            graphics.pose().scale(scale, scale);
+
+            int x0 = Math.round(-width * 0.5F);
+            int y0 = Math.round(-height * 0.5F);
+            int x1 = x0 + Math.round(width);
+            int y1 = y0 + Math.round(height);
+
+            graphics.fill(x0, y0, x1, y1, 0xC812151B);
+            graphics.fill(x0, y0, x1, y0 + 1, 0x4DFFFFFF);
+            graphics.fill(x0, y1 - 1, x1, y1, 0x26FFFFFF);
+            graphics.fill(x0 + 4, y0 + 4, x0 + 5, y1 - 4, 0xFF8DCCB3);
+
+            graphics.pose().pushMatrix();
+            try {
+                graphics.pose().translate(x0 + 7.0F, y0 + 3.0F);
+                graphics.pose().scale(0.7F, 0.7F);
+                graphics.renderItem(structure.item.getDefaultInstance(), 0, 0);
+            } finally {
+                graphics.pose().popMatrix();
+            }
+
+            int timerWidth = mc.font.width(timer);
+            graphics.drawString(mc.font, label, x0 + 21, y0 + 4, 0xFFF0F3F5, true);
+            graphics.drawString(mc.font, timer, x1 - timerWidth - 5, y0 + 4, 0xFFFFFFFF, true);
+
+            int barX = x0 + 21;
+            int barY = y1 - 7;
+            int barWidth = Math.max(1, x1 - 5 - barX);
+            graphics.fill(barX, barY, barX + barWidth, barY + 1, 0x40FFFFFF);
+            int filled = Math.round(barWidth * Math.max(0.0F, Math.min(1.0F, ratio)));
+            if (filled > 0) {
+                graphics.fill(barX, barY, barX + filled, barY + 1, 0xFF8DCCB3);
+            }
+        } finally {
+            graphics.pose().popMatrix();
+        }
     }
 
     private void drawLines(GuiGraphics graphics, List<String> lines, Vec3 screen) {
@@ -1554,10 +1666,13 @@ public final class ServerHelper extends Module {
     }
 
     public record HudBind(String key, Item item, BindSetting setting, ItemStack stack, int inventoryCount,
-                          float cooldownProgress, String displayName) {
+                          float cooldownProgress, int cooldownTicks, String displayName) {
     }
 
     public record HudEvent(String name, String level, String owner, String timer, double distance) {
+    }
+
+    public record HudStructure(String label, ItemStack icon, double remainingSeconds, float ratio) {
     }
 
     private record KeyBindingEntry(String key, Item item, BindSetting setting, float distance) {
@@ -1566,7 +1681,8 @@ public final class ServerHelper extends Module {
     private record EffectRequirement(Holder<MobEffect> effect, int minAmplifier) {
     }
 
-    private record Structure(Item item, Vec3 vec, String world, int anarchy, double time, long created, float half) {
+    private record Structure(Item item, Vec3 vec, String world, int anarchy, double time, long created, float half,
+                             double duration, String label) {
     }
 
     private record ServerEventData(String name, String lvl, String owner, Vec3 vec, String world, int anarchy,

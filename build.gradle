@@ -1,11 +1,11 @@
-plugins {
+﻿plugins {
 	id 'fabric-loom' version "${loom_version}"
 	id 'maven-publish'
 }
 
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 
-version = '1.0.0'
+version = '1.1.0'
 group = 'releon.ru'
 
 //def localBuildRoot = System.getenv("LOCALAPPDATA")
@@ -35,8 +35,25 @@ dependencies {
 	implementation "de.maxhenkel.voicechat:voicechat-api:2.6.20"
 	modRuntimeOnly "maven.modrinth:simple-voice-chat:fabric-1.21.11-2.6.22"
 	modRuntimeOnly "de.maxhenkel.voicechat:voicechat-api:2.6.20:fabric-stub"
-	modImplementation "maven.modrinth:sodium:mc1.21.11-0.8.12-fabric"
-	modImplementation "maven.modrinth:iris:1.10.7+1.21.11-fabric"
+	modImplementation "maven.modrinth:sodium:mc1.21.11-0.8.14-fabric"
+	modImplementation "maven.modrinth:iris:1.10.8+1.21.11-fabric"
+
+	// Performance stack for the development client (Minecraft 1.21.11 / Fabric).
+	modRuntimeOnly "maven.modrinth:gvQqBUqZ:Ow7wA0kG" // Lithium 0.21.4
+	modRuntimeOnly "maven.modrinth:5ZwdcRci:4EwhsTu7" // ImmediatelyFast 1.14.3
+	modRuntimeOnly files('libs/Reflect-1.6.2.jar')
+	modRuntimeOnly "maven.modrinth:NNAgCjsB:CTabrwB1" // Entity Culling 1.11.3
+	modRuntimeOnly files('libs/TRansition-1.0.26-1.21.11-fabric-SNAPSHOT.jar')
+	modRuntimeOnly files('libs/TRender-1.0.17-1.21.11-fabric-SNAPSHOT.jar')
+	modRuntimeOnly "maven.modrinth:51shyZVL:wOzykoLV" // More Culling 1.6.2
+	modRuntimeOnly files('libs/conditional-mixin-fabric-0.6.3.jar')
+	modRuntimeOnly files('libs/mixinsquared-fabric-0.2.0.jar')
+	modRuntimeOnly "maven.modrinth:9s6osm5g:xuX40TN5" // Cloth Config API 21.11.153
+	modRuntimeOnly files('libs/basic-math-0.6.1.jar')
+	modRuntimeOnly "maven.modrinth:uXXizFIs:Ii0gP3D8" // FerriteCore 8.2.0
+	modRuntimeOnly "maven.modrinth:g96Z4WVZ:Q3Dusz2j" // BadOptimizations 2.4.1
+	modRuntimeOnly "maven.modrinth:PtjYWJkn:efIKaD8Q" // Sodium Extra 0.9.5
+	modRuntimeOnly "maven.modrinth:Bh37bMuy:ffpCc8nY" // Reese's Sodium Options 2.2.4
 	implementation "org.anarres:jcpp:1.4.14"
 	implementation "io.github.douira:glsl-transformer:3.0.0-pre3"
 	implementation "org.antlr:antlr4-runtime:4.13.1"
@@ -77,6 +94,8 @@ tasks.withType(JavaExec).configureEach {
 			jvmArgs('-XX:+AllowEnhancedClassRedefinition')
 		}
 	}
+	jvmArgs('-Xms1G', '-Xmx4G', '-XX:+UseG1GC', '-XX:MaxGCPauseMillis=40',
+			'-XX:+ParallelRefProcEnabled', '-XX:+UseStringDeduplication')
 }
 
 java {

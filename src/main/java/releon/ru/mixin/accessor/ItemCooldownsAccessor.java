@@ -4,6 +4,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemCooldowns;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
+import org.spongepowered.asm.mixin.gen.Invoker;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.Map;
 
@@ -14,4 +16,6 @@ public interface ItemCooldownsAccessor {
 
     @Accessor("tickCount")
     int releon$getTickCount();
+    @Invoker("getCooldownGroup")
+    Identifier releon$getCooldownGroup(ItemStack stack);
 }

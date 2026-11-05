@@ -8,8 +8,11 @@ import releon.ru.api.events.impl.DrawEvent;
 import releon.ru.api.module.Module;
 import releon.ru.api.module.ModuleCategory;
 import releon.ru.api.settings.impl.BooleanSetting;
+import releon.ru.api.settings.impl.ModeSetting;
 import releon.ru.api.settings.impl.MultiModeSetting;
+import releon.ru.api.module.impl.visual.hudmodern.NewHudRenderer;
 import releon.ru.utils.render.LoadingVisualGuard;
+import releon.ru.utils.render.ui.Render2DCoordinateSpace;
 import releon.ru.utils.render.item.RenderItem;
 import releon.ru.utils.render.ui.Render2D;
 import releon.ru.utils.render.ui.blur.BuiltBlur;
@@ -32,12 +35,15 @@ public class Hud extends Module {
             "TargetHud",
             "Staff",
             "Inventory",
-            "Events"
+            "Events",
+            "Structures"
     };
     private static Hud instance;
 
     private final MultiModeSetting elements = register(new MultiModeSetting("Elements", "HUD elements to render.",
             ELEMENTS, ELEMENTS));
+    private final ModeSetting style = register(new ModeSetting("HUD Style", "Base — текущий HUD, New — HUD из Include.",
+            "Base", "Base", "New"));
     private final BooleanSetting blur = register(new BooleanSetting("Blur", "Use blurred HUD backgrounds.", true));
     private final BooleanSetting glow = register(new BooleanSetting("Glow", "Use glow effects on HUD elements.", true));
 
@@ -56,7 +62,8 @@ public class Hud extends Module {
             //new MediaPlayer(), не ворк пока что
             //new WatermarkIcons(), // Debug panel - disabled
             new AnimationShowcase(),
-            new Events()
+            new Events(),
+            new releon.ru.api.drag.impl.Structures()
     );
 
     public Hud() {
@@ -130,6 +137,22 @@ public class Hud extends Module {
             return;
         }
 
+        NewHudRenderer modern = NewHudRenderer.getInstance();
+        if (style.is("New")) {
+            if (modern == null) {
+                return;
+            }
+            if (!modern.isEnabled()) {
+                modern.setEnabled(true);
+            }
+        }
+        // The NEW suite can also run on its own module; never force-disable a user toggle here.
+        if (modern != null && modern.isEnabled()) {
+            // Render through the same layers as the base HUD so visibility in chat/screens matches exactly.
+            modern.render(event.getGraphics());
+            return;
+        }
+
         ElementScreen screen = ElementScreen.current();
         ElementManager elementManager = ElementManager.getInstance();
         elementManager.frame(screen);
@@ -156,7 +179,15 @@ public class Hud extends Module {
     }
 
     public boolean handleMouseClicked(MouseButtonEvent event, boolean doubled) {
-        if (!isEnabled() || event == null || event.button() != 0) {
+        if (event == null || event.button() != 0) {
+            return false;
+        }
+        NewHudRenderer modern = NewHudRenderer.getInstance();
+        if (modern != null && modern.isEnabled()) {
+            float scale = Render2DCoordinateSpace.guiIndependentScale();
+            return modern.mouseClicked(event.x() * scale, event.y() * scale);
+        }
+        if (!isEnabled()) {
             return false;
         }
         for (int i = elementsList.size() - 1; i >= 0; i--) {

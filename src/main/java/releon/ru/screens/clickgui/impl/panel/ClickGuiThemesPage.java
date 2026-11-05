@@ -20,8 +20,8 @@ import java.util.List;
  * подпрыгивали при наведении на дробные пиксели — всё это менялось каждый кадр при движении мыши.
  */
 public final class ClickGuiThemesPage {
-    private static final float GAP = 8.0f;
-    private static final float HERO_H = 58.0f;
+    private static final float GAP = 7.0f;
+    private static final float HERO_H = 44.0f;
     private static final float RADIUS = 7.0f;
     private static final long CARD_DELAY_MS = 30L;
     private static final int STAGGER_CAP = 16;
@@ -74,11 +74,11 @@ public final class ClickGuiThemesPage {
         py = y;
         pw = w;
         ph = h;
-        int cols = w >= 640.0f ? 5 : (w >= 470.0f ? 4 : (w >= 300.0f ? 3 : 2));
+        int cols = Math.max(1, Math.min(4, (int) ((w + GAP) / 137.0f)));
         int rows = (count + cols - 1) / cols;
         float pixel = ClickGuiTheme.px();
         cardW = (float) Math.floor((w - GAP * (cols - 1)) / cols / pixel) * pixel;
-        cardH = ClickGuiTheme.snap(Math.max(74.0f, Math.min(98.0f, cardW * 0.74f)));
+        cardH = ClickGuiTheme.snap(Math.max(64.0f, Math.min(78.0f, cardW * 0.56f)));
         float gridTop = HERO_H + GAP + 2.0f;
         contentH = gridTop + rows * cardH + (rows - 1) * GAP + 6.0f;
         scrollLimit = Math.max(0.0f, contentH - h);
@@ -134,7 +134,7 @@ public final class ClickGuiThemesPage {
         }
         float e = ClickGuiTheme.easeOutCubic(t);
         gx = cardX[i];
-        gy = ClickGuiTheme.snap(cardY[i] + (1.0f - e) * 8.0f);
+        gy = ClickGuiTheme.snap(cardY[i]);
         ga = ClickGuiTheme.clamp01(t * 1.6f) * alpha;
         return ga > 0.01f;
     }
@@ -171,7 +171,7 @@ public final class ClickGuiThemesPage {
             float y0 = gy;
             float cw = cardW;
             float ch = cardH;
-            float bannerH = ClickGuiTheme.snap(ch * 0.48f);
+            float bannerH = ClickGuiTheme.snap(ch * 0.42f);
 
             // внешнее свечение выбранной
             if (selected) {
@@ -192,7 +192,7 @@ public final class ClickGuiThemesPage {
                     RADIUS, RADIUS, 0.0f, 0.0f, tl, tr, br, bl);
 
             // мини-окно поверх баннера (превью интерфейса в цветах темы)
-            float mw = Math.min(cw * 0.52f, 62.0f);
+            float mw = Math.min(cw * 0.65f, 72.0f);
             float mh = bannerH - 12.0f;
             if (mh > 12.0f) {
                 float mx0 = x0 + 8.0f;
@@ -310,10 +310,10 @@ public final class ClickGuiThemesPage {
             float gw = ClickGuiTheme.snap(Math.min(110.0f, pw * 0.24f));
             float tx = px + gw + 14.0f;
             ClickGuiThemes.Theme cur = ClickGuiThemes.currentTheme();
-            ClickGuiTheme.text(FontType.SEMIBOLD, "ТЕКУЩАЯ ТЕМА", tx, heroY + 15.0f, 5.0f, ClickGuiTheme.c(ClickGuiTheme.TEXT_MUTED, a));
-            float maxW = Math.max(20.0f, px + pw - 100.0f - tx);
-            ClickGuiTheme.text(FontType.BOLD, ClickGuiTheme.ellipsize(FontType.BOLD, cur.name(), 11.0f, maxW), tx, heroY + 28.0f, 11.0f, ClickGuiTheme.c(ClickGuiTheme.TEXT, a));
-            ClickGuiTheme.text(FontType.SEMIBOLD, ClickGuiTheme.ellipsize(FontType.SEMIBOLD, cur.description(), 6.0f, maxW), tx, heroY + 42.0f, 6.0f, ClickGuiTheme.c(ClickGuiTheme.TEXT_DIM, a));
+            ClickGuiTheme.text(FontType.SEMIBOLD, "ТЕКУЩАЯ ТЕМА", tx, heroY + 10.0f, 5.0f, ClickGuiTheme.c(ClickGuiTheme.TEXT_MUTED, a));
+            float maxW = Math.max(20.0f, px + pw - 150.0f - tx);
+            ClickGuiTheme.text(FontType.BOLD, ClickGuiTheme.ellipsize(FontType.BOLD, cur.name(), 11.0f, maxW), tx, heroY + 22.0f, 11.0f, ClickGuiTheme.c(ClickGuiTheme.TEXT, a));
+            ClickGuiTheme.text(FontType.SEMIBOLD, ClickGuiTheme.ellipsize(FontType.SEMIBOLD, cur.description(), 6.0f, maxW), tx, heroY + 35.0f, 6.0f, ClickGuiTheme.c(ClickGuiTheme.TEXT_DIM, a));
         }
 
         for (int i = 0; i < count; i++) {
@@ -324,7 +324,7 @@ public final class ClickGuiThemesPage {
             boolean selected = i == active;
             float x0 = gx;
             float y0 = gy;
-            float bannerH = ClickGuiTheme.snap(cardH * 0.48f);
+            float bannerH = ClickGuiTheme.snap(cardH * 0.42f);
             float nameCy = y0 + bannerH + (cardH - bannerH) * 0.34f;
             float maxW = cardW - 34.0f;
             ClickGuiTheme.text(FontType.SEMIBOLD, ClickGuiTheme.ellipsize(FontType.SEMIBOLD, theme.name(), 7.4f, maxW), x0 + 8.0f, nameCy, 7.4f,

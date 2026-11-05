@@ -1,0 +1,1 @@
+{"parent":"minecraft:item/generated","textures":{"layer0":"include:item/cosmetics/bodywear/137_preview"},"display":{"head":{"translation":[0,6,0],"scale":[1.15,1.15,1.15]},"ground":{"scale":[0.5,0.5,0.5]}}}

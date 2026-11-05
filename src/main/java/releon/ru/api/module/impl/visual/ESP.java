@@ -1,13 +1,11 @@
 package releon.ru.api.module.impl.visual;
 
 import releon.ru.utils.render.color.ClientTheme;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Display.TextDisplay;
 import net.minecraft.world.entity.Entity;
@@ -50,6 +48,8 @@ import java.util.Map;
 import java.util.Set;
 
 public final class ESP extends Module {
+    private final ModeSetting style = register(new ModeSetting("Style", "ESP renderer.", "New", "Base", "New"));
+    private final releon.ru.api.module.impl.visual.esp.prism.NewEspRenderer modern = new releon.ru.api.module.impl.visual.esp.prism.NewEspRenderer();
     private static final Comparator<RenderEntry> RENDER_DISTANCE_COMPARATOR = Comparator.comparingDouble(RenderEntry::distanceSqr).reversed();
     private static final Comparator<CompactItemRowAccumulator> COMPACT_ITEM_ROW_COMPARATOR = Comparator
             .comparing(CompactItemRowAccumulator::id)
@@ -110,6 +110,18 @@ public final class ESP extends Module {
         glowFill.visibleWhen(() -> elements.isSelected("Shader Glow"));
         glowSecondary.visibleWhen(() -> elements.isSelected("Shader Glow"));
         instance = this;
+        for (var setting : getSettings()) {
+            if (setting != style) setting.visibleAlso(() -> style.is("Base"));
+        }
+        for (var setting : modern.getSettings()) {
+            setting.visibleAlso(() -> style.is("New"));
+            register(setting);
+        }
+        heldItemsSetting.setVisible(true);
+        heldOnlySpecial.setVisible(heldItemsSetting::getValue);
+        heldEnchantMark.setVisible(heldItemsSetting::getValue);
+        heldBackground.setVisible(heldItemsSetting::getValue);
+        style.addListener((setting, old, value) -> { modern.onDisable(); trackedEntities.clear(); seenEntities.clear(); });
     }
 
     // ------------------------------------------------------------ shader glow
@@ -151,7 +163,8 @@ public final class ESP extends Module {
     }
 
     public static boolean shouldHideVanillaName(Entity entity) {
-        return instance != null && instance.isEnabled() && instance.shouldHideVanillaNameInternal(entity);
+        return instance != null && instance.isEnabled() && (instance.style.is("New")
+                ? instance.modern.hides(entity) : instance.shouldHideVanillaNameInternal(entity));
     }
 
     public static boolean shouldSuppressServerTagEntity(Entity entity) {
@@ -177,12 +190,14 @@ public final class ESP extends Module {
     @Override
     public void onTick(Minecraft client) {
         healthTracker.prune();
-        shaderGlowCached = elements.isSelected("Shader Glow");
+        shaderGlowCached = style.is("Base") && elements.isSelected("Shader Glow");
+        if (style.is("New")) modern.onTick(client);
         rebuildTargets(client);
     }
 
     @Override
     protected void onDisable() {
+        modern.onDisable();
         trackedEntities.clear();
         seenEntities.clear();
         shaderGlowCached = false;
@@ -191,7 +206,7 @@ public final class ESP extends Module {
 
     @SubscribeEvent
     private void onWorldRender(WorldRenderEvent event) {
-        if (!elements.isSelected("3D Box") || mc.player == null || mc.level == null) {
+        if (!style.is("Base") || !elements.isSelected("3D Box") || mc.player == null || mc.level == null) {
             return;
         }
 
@@ -212,6 +227,12 @@ public final class ESP extends Module {
     @SubscribeEvent
     private void onDraw(DrawEvent event) {
         if (mc.player == null || mc.level == null || mc.getWindow() == null) {
+            return;
+        }
+
+        if (style.is("New")) {
+            modern.onRender2D(event.getGraphics(), mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight());
+            if (heldItemsSetting.getValue()) drawModernHeld(event);
             return;
         }
 
@@ -292,11 +313,21 @@ public final class ESP extends Module {
                 if (!(entry.entity() instanceof Player player)) {
                     continue;
                 }
-                List<Component> heldLines = resolveHeldItemLines(player);
+                List<EspVisualRenderer.HeldItemTag> heldLines = resolveHeldItemLines(player);
                 if (!heldLines.isEmpty()) {
                     drawHeldItemsBelowFeet(graphics, player, context, heldLines, alphaForDistance(entry.distanceSqr()));
                 }
             }
+        }
+    }
+
+    private void drawModernHeld(DrawEvent event) {
+        var context = EspGeometry.createProjectionContext(mc, event.getPartialTicks());
+        if (context == null) return;
+        for (Entity entity : modern.entities()) {
+            if (!(entity instanceof Player player)) continue;
+            List<EspVisualRenderer.HeldItemTag> lines = resolveHeldItemLines(player);
+            if (!lines.isEmpty()) drawHeldItemsBelowFeet(event.getGraphics(), player, context, lines, 1f);
         }
     }
 
@@ -664,21 +695,20 @@ public final class ESP extends Module {
         return false;
     }
 
-    private Component decorateHeldItem(ItemStack stack, String plain) {
-        MutableComponent text = Component.empty().append(stack.getHoverName());
-
+    private EspVisualRenderer.HeldItemTag decorateHeldItem(ItemStack stack, String plain) {
         if (heldEnchantMark.getValue() && looksLikeTalisman(plain)) {
             boolean enchanted = stack.isEnchanted();
-            text.append(Component.literal(" (").withStyle(ChatFormatting.GRAY))
-                    .append(Component.literal(enchanted ? "зачарованный" : "незачарованный")
-                            .withStyle(enchanted ? ChatFormatting.GREEN : ChatFormatting.RED))
-                    .append(Component.literal(")").withStyle(ChatFormatting.GRAY));
+            String suffix = enchanted ? "зачарованный" : "незачарованный";
+            int color = enchanted
+                    ? releon.ru.utils.render.color.ColorUtil.rgba(85, 255, 110, 255)
+                    : releon.ru.utils.render.color.ColorUtil.rgba(255, 85, 95, 255);
+            return new EspVisualRenderer.HeldItemTag(plain, suffix, color);
         }
-        return text;
+        return new EspVisualRenderer.HeldItemTag(plain, "", 0);
     }
 
-    private List<Component> resolveHeldItemLines(Player player) {
-        List<Component> lines = new ArrayList<>(2);
+    private List<EspVisualRenderer.HeldItemTag> resolveHeldItemLines(Player player) {
+        List<EspVisualRenderer.HeldItemTag> lines = new ArrayList<>(2);
 
         ItemStack main = player.getMainHandItem();
         ItemStack off = player.getOffhandItem();
@@ -701,14 +731,13 @@ public final class ESP extends Module {
     }
 
     private void drawHeldItemsBelowFeet(GuiGraphics graphics, Player player, EspGeometry.ProjectionContext context,
-                                        List<Component> lines, float alphaFactor) {
+                                        List<EspVisualRenderer.HeldItemTag> lines, float alphaFactor) {
         if (lines.isEmpty()) {
             return;
         }
 
         float alpha = Mth.clamp(alphaFactor, 0.0F, 1.0F);
-        int textAlpha = Math.round(255.0F * alpha);
-        if (textAlpha <= 12) {
+        if (alpha <= 0.05F) {
             return;
         }
 
@@ -731,36 +760,7 @@ public final class ESP extends Module {
             return;
         }
 
-        int lineHeight = 10;
-        int padding = 3;
-        int centerX = (int) screen.x();
-        int top = (int) screen.y();
-
-        int maxWidth = 0;
-        for (Component line : lines) {
-            maxWidth = Math.max(maxWidth, mc.font.width(line));
-        }
-        if (maxWidth <= 0) {
-            return;
-        }
-
-        int panelWidth = maxWidth + padding * 2;
-        int panelHeight = lines.size() * lineHeight + padding * 2 - 2;
-        int left = centerX - panelWidth / 2;
-
-        if (heldBackground.getValue()) {
-            int bgColor = Math.round(140.0F * alpha) << 24;
-            graphics.fill(left, top, left + panelWidth, top + panelHeight, bgColor);
-        }
-
-        int fallbackColor = (textAlpha << 24) | 0xFFFFFF;
-
-        int y = top + padding;
-        for (Component line : lines) {
-            int textWidth = mc.font.width(line);
-            graphics.drawString(mc.font, line, centerX - textWidth / 2, y, fallbackColor, true);
-            y += lineHeight;
-        }
+        EspVisualRenderer.drawHeldItemTags(lines, screen.x(), screen.y(), alpha, heldBackground.getValue());
     }
 
     private record RenderEntry(
