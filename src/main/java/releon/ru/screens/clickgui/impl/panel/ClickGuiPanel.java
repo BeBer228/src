@@ -489,8 +489,8 @@ public final class ClickGuiPanel {
         float total = gridH + scrollLimit;
         float thumbH = Math.max(24.0f, gridH * (gridH / total));
         float thumbY = gridY + (scrollAnimation.get() / scrollLimit) * (gridH - thumbH);
-        ClickGuiTheme.rect(trackX, gridY, 1.0f, gridH, 0.5f, ClickGuiTheme.c(ClickGuiTheme.FIELD, alpha));
-        ClickGuiTheme.rect(trackX, thumbY, 1.0f, thumbH, 0.5f, ClickGuiTheme.c(ClickGuiTheme.ACCENT, 200, alpha));
+        ClickGuiTheme.rect(trackX, gridY, 2.0f, gridH, 1.0f, ClickGuiTheme.c(ClickGuiTheme.FIELD, alpha));
+        ClickGuiTheme.rect(trackX, thumbY, 2.0f, thumbH, 1.0f, ClickGuiTheme.c(ClickGuiTheme.ACCENT, 200, alpha));
     }
 
     // ================================================================ data / layout

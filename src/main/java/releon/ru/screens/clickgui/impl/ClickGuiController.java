@@ -20,8 +20,6 @@ import releon.ru.utils.render.ui.Render2DCoordinateSpace;
 
 
 public final class ClickGuiController {
-    /** Множитель размера ClickGUI поверх авто-масштаба (1.75 = в 1.75 раза крупнее). */
-    private static final float UI_SCALE = 1.75f;
     private static final SmoothAnimation OPEN_ANIMATION = new SmoothAnimation();
     private static final ClickGuiPanel WINDOW = new ClickGuiPanel();
 
@@ -50,16 +48,6 @@ public final class ClickGuiController {
     }
 
     public static void renderPanels(GuiGraphics graphics, int screenWidth, int screenHeight) {
-        graphics.pose().pushMatrix();
-        try {
-            graphics.pose().scale(UI_SCALE, UI_SCALE);
-            renderPanelsScaled(graphics, screenWidth, screenHeight);
-        } finally {
-            graphics.pose().popMatrix();
-        }
-    }
-
-    private static void renderPanelsScaled(GuiGraphics graphics, int screenWidth, int screenHeight) {
         updateMousePosition();
         float coordinateScale = coordinateScale();
         int designScreenWidth = Math.max(1, Math.round(screenWidth / coordinateScale));
@@ -355,7 +343,7 @@ public final class ClickGuiController {
     }
 
     private static float coordinateScale() {
-        return Render2DCoordinateSpace.guiIndependentScale() * UI_SCALE;
+        return Render2DCoordinateSpace.guiIndependentScale();
     }
 
     private static void updateMousePosition() {

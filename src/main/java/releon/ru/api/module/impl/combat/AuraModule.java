@@ -32,10 +32,7 @@ import releon.ru.api.module.impl.combat.aura.target.MultiPoint;
 import releon.ru.api.module.impl.combat.aura.target.TargetFinder;
 import releon.ru.api.module.impl.combat.aura.util.TaskPriority;
 import releon.ru.api.module.impl.movement.ElytraTarget;
-import net.minecraft.world.entity.player.Player;
 import releon.ru.api.settings.impl.BooleanSetting;
-import releon.ru.manager.Manager;
-import releon.ru.utils.repository.friend.FriendUtils;
 import releon.ru.api.settings.impl.ModeSetting;
 import releon.ru.api.settings.impl.MultiModeSetting;
 import releon.ru.api.settings.impl.NumberSetting;
@@ -314,10 +311,6 @@ public class AuraModule extends Module {
                     controller.restoreVanillaLook();
                 }
             }
-            return;
-        }
-        if (event.getPhase() == EventPhase.POST && target != null && isExcludedTarget(target)) {
-            target = null;
             return;
         }
         if (event.getPhase() == EventPhase.POST && target != null) {
@@ -719,24 +712,7 @@ public class AuraModule extends Module {
         TargetFinder.EntityFilter filter = new TargetFinder.EntityFilter(targetType.getValue());
         targetSelector.searchTargets(client.level.entitiesForRendering(), finalDistance(), 360.0F, options.isSelected("Бить через стены"), filter::isValid);
         targetSelector.validateTarget(filter::isValid);
-        LivingEntity picked = targetSelector.getCurrentTarget();
-        if (isExcludedTarget(picked)) {
-            targetSelector.releaseTarget();
-            return null;
-        }
-        return picked;
-    }
-
-    /** Единая точка отказа: друзья (при NoFriendDamage) и боты никогда не становятся целью атаки. */
-    public static boolean isExcludedTarget(LivingEntity entity) {
-        if (!(entity instanceof Player player)) {
-            return false;
-        }
-        Minecraft mc = Minecraft.getInstance();
-        if (player == mc.player || AntiBot.isLikelyBot(player)) {
-            return true;
-        }
-        return FriendUtils.isFriend(player) && Manager.getModules().isEnabled(NoFriendDamage.class);
+        return targetSelector.getCurrentTarget();
     }
 
     private void finishRotationOnRelease(Minecraft client) {

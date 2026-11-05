@@ -3,7 +3,6 @@ package releon.ru.api.module.impl.combat;
 import com.adl.nativeprotect.Native;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
@@ -130,25 +129,6 @@ public class AntiBot extends Module {
 
     public static boolean shouldIgnore(Player player) {
         return instance != null && instance.isEnabled() && instance.isBot(player);
-    }
-
-    /**
-     * Для таргетинга: не зависит от того, включён ли AntiBot.
-     * Бот = известен по эвристикам ИЛИ его нет в списке игроков таба (реальный игрок всегда там есть).
-     */
-    public static boolean isLikelyBot(Player player) {
-        if (player == null) {
-            return false;
-        }
-        Minecraft mc = Minecraft.getInstance();
-        if (player == mc.player) {
-            return false;
-        }
-        if (instance != null && instance.isBot(player)) {
-            return true;
-        }
-        ClientPacketListener connection = mc.getConnection();
-        return connection != null && connection.getPlayerInfo(player.getUUID()) == null;
     }
 
     public static boolean isKnownBot(UUID uuid) {
