@@ -176,6 +176,7 @@ public final class BackTrack extends Module {
     private boolean shouldDelay(Minecraft mc, Vec3 receivedPosition) {
         AuraModule aura = AuraModule.getInstance();
         if (aura == null || tracked == null) return false;
+        if (mc.player.isInWater() || mc.player.isUnderWater() || tracked.isInWater() || tracked.isUnderWater()) return false;
         double range = aura.attackDistance();
         if (!Double.isFinite(range) || range <= 0.0D) return false;
         double currentDistance = mc.player.position().distanceTo(tracked.position());

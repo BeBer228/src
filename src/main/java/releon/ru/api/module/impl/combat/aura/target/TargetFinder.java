@@ -10,9 +10,11 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import releon.ru.api.module.impl.combat.AntiBot;
 import releon.ru.api.module.impl.combat.AuraModule;
+import releon.ru.api.module.impl.combat.NoFriendDamage;
 import releon.ru.api.module.impl.combat.aura.AngleConnection;
 import releon.ru.api.module.impl.combat.aura.MathAngle;
 import releon.ru.api.module.impl.combat.aura.impl.LinearConstructor;
+import releon.ru.manager.Manager;
 import releon.ru.utils.repository.friend.FriendUtils;
 
 import java.util.ArrayList;
@@ -215,10 +217,14 @@ public class TargetFinder {
                 return false;
             }
             if (entity instanceof Player player) {
-                if (AntiBot.shouldIgnore(player)) {
+                if (AntiBot.isLikelyBot(player)) {
                     return false;
                 }
-                return FriendUtils.isFriend(player) ? targetSettings.contains("Friends") : targetSettings.contains("Players");
+                boolean friend = FriendUtils.isFriend(player);
+                if (friend && Manager.getModules().isEnabled(NoFriendDamage.class)) {
+                    return false;
+                }
+                return friend ? targetSettings.contains("Friends") : targetSettings.contains("Players");
             }
             if (entity instanceof Animal) {
                 return targetSettings.contains("Animals");
