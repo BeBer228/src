@@ -13,6 +13,7 @@ public record HudFont(FontType type, int size) {
         return font;
     }
     public float getStringWidth(String text) { return Render2D.textWidth(type, text, size); }
-    public float centeredY(float top, float height) { return top + (height - size) * .5f; }
+    /** Top y that centres the real line box (not the nominal size) inside [top, top+height]. */
+    public float centeredY(float top, float height) { return top + (height - Render2D.textLineHeight(type, size)) * .5f; }
     public void drawString(GuiGraphics g, String text, float x, float y, int color) { PrismDraw.text(g, type, text, x, y, size, color); }
 }

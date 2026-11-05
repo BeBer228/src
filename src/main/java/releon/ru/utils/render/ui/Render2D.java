@@ -1488,6 +1488,11 @@ public final class Render2D {
         }
     }
 
+    /** Height of the font's line box, the box a top-left drawn text occupies. */
+    public static float textLineHeight(FontType font, float size) {
+        return text().lineHeight(fontName(font), size);
+    }
+
     public static float textWidth(String nameFont, String text, float size) {
         return Render2D.text().width(nameFont, text, size);
     }

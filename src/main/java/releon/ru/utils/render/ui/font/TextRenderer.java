@@ -101,6 +101,10 @@ public final class TextRenderer implements AutoCloseable {
         frameBatches.clear();
     }
 
+    public float lineHeight(String fontName, float size) {
+        return fontManager.strike(fontName, size).lineHeight();
+    }
+
     public float width(String fontName, String text, float size) {
         if (text == null || text.isEmpty()) {
             return 0.0f;
