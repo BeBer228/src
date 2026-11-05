@@ -34,7 +34,9 @@ public final class ShaderSky extends Module {
     private final ModeSetting mode = register(new ModeSetting("Mode", "Рисунок неба.", "Sky", "Aurora", "Night", "Snow", "Sky", "Star", "Glow"));
     private final NumberSetting intensity = register(new NumberSetting("Intensity", "Яркость.", 1, .1, 1, .05));
     private final NumberSetting speed = register(new NumberSetting("Speed", "Скорость анимации.", 1, .1, 3, .1));
+    private final NumberSetting scale = register(new NumberSetting("Scale", "Размер рисунка.", 1.1, .45, 3, .05));
     private final NumberSetting stars = register(new NumberSetting("Stars", "Плотность звёзд.", .75, 0, 1, .05));
+    private final BooleanSetting vanillaSky = register(new BooleanSetting("Vanilla Sky", "Пропускать ванильное небо.", false));
     private final ModeSetting colorMode = register(new ModeSetting("Color Mode", "Цвет неба.", "Custom", "Theme", "Custom"));
     private final ColorSetting color1 = register(new ColorSetting("Color 1", "Основной цвет.", new Color(-10328335, true)));
     private final ColorSetting color2 = register(new ColorSetting("Color 2", "Второй цвет.", new Color(-10328335, true)));
@@ -68,12 +70,13 @@ public final class ShaderSky extends Module {
         var encoder = device.createCommandEncoder();
         try (MemoryStack stack = MemoryStack.stackPush()) {
             ByteBuffer data = stack.calloc(96);
-            data.putFloat(0, target.width).putFloat(4, target.height).putFloat(8, (System.currentTimeMillis() - start) / 1000f).putFloat(12, .78f);
+            float alpha = vanillaSky.getValue() ? .78f : 1f;
+            data.putFloat(0, target.width).putFloat(4, target.height).putFloat(8, (System.currentTimeMillis() - start) / 1000f).putFloat(12, alpha);
             int first = colorMode.is("Custom") ? color1.getValue().getRGB() : ClientTheme.primary();
             int second = colorMode.is("Custom") ? color2.getValue().getRGB() : ClientTheme.secondary();
-            putColor(data, 16, first); putColor(data, 32, second); putColor(data, 48, 0xFFFFFFFF);
-            data.putFloat(64, mode.getModes().indexOf(mode.getValue())).putFloat(68, speed.getFloat()).putFloat(72, 1.10f).putFloat(76, intensity.getFloat());
-            data.putFloat(80, stars.getFloat()).putFloat(84, 1);
+            putColor(data, 16, first, alpha); putColor(data, 32, second, alpha); putColor(data, 48, 0xFFFFFFFF, alpha);
+            data.putFloat(64, mode.getModes().indexOf(mode.getValue())).putFloat(68, speed.getFloat()).putFloat(72, scale.getFloat()).putFloat(76, intensity.getFloat());
+            data.putFloat(80, stars.getFloat()).putFloat(84, vanillaSky.getValue() ? 1 : 0);
             encoder.writeToBuffer(dataBuffer.slice(), data);
             ByteBuffer projection = stack.malloc(64);
             inverse.set(Render3D.lastProjMat).mul(Render3D.lastModMat).invert().get(0, projection);
@@ -86,8 +89,8 @@ public final class ShaderSky extends Module {
             pass.draw(0, 3);
         }
     }
-    private static void putColor(ByteBuffer b, int offset, int color) {
+    private static void putColor(ByteBuffer b, int offset, int color, float alpha) {
         b.putFloat(offset, (color >> 16 & 255) / 255f).putFloat(offset + 4, (color >> 8 & 255) / 255f)
-                .putFloat(offset + 8, (color & 255) / 255f).putFloat(offset + 12, (color >>> 24) / 255f * .78f);
+                .putFloat(offset + 8, (color & 255) / 255f).putFloat(offset + 12, (color >>> 24) / 255f * alpha);
     }
 }

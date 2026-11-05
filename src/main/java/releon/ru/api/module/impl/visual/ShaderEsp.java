@@ -161,17 +161,8 @@ public class ShaderEsp extends Module {
     }
 
     private void configureControls() {
-        for (Setting<?> setting : getSettings()) setting.setVisible(false);
-        for (var setting : java.util.List.of(range, colorMode, opacity)) setting.setVisible(true);
         tintColor.setVisible(() -> colorMode.is("Custom"));
-        group("Цели", localPlayer, players, mobs, items, ignoreNaked);
-        group("Эффекты", glow, fill, outline, friendColor, hurtColor, pulse, shimmer);
-    }
-    private void group(String name, BooleanSetting... options) {
-        String[] names = java.util.Arrays.stream(options).map(Setting::getName).toArray(String[]::new);
-        String[] selected = java.util.Arrays.stream(options).filter(s -> s.getValue()).map(Setting::getName).toArray(String[]::new);
-        var setting = register(new MultiModeSetting(name, "", names, selected));
-        setting.addListener((changed, old, value) -> { for (int i = 0; i < options.length; i++) options[i].setValue(value.contains(names[i])); });
+        hurtTint.setVisible(() -> hurtColor.getValue());
     }
 
     public static ShaderEsp getInstance() {
