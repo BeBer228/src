@@ -299,7 +299,7 @@ public final class NewHudElement extends NewHudPanel {
         var profile=releon.ru.utils.media.DiscordHudProfile.current();
         String server=MC.getCurrentServer()==null?HudLocalization.ui("Singleplayer","Одиночная игра","Одиночна гра"):MC.getCurrentServer().ip;
         int ping=NewHudRenderer.ping();
-        String[] labels={"include",server,profile==null?"Discord":profile.name(),MC.getFps()+" FPS",ping+" MS"};String[] icons={"logo","pin","discord","fps","signal"};
+        String[] labels={"titanium",server,profile==null?"Discord":profile.name(),MC.getFps()+" FPS",ping+" MS"};String[] icons={"logo","pin","discord","fps","signal"};
         NewHudSettings.Part[] parts={TEXT,SERVER,PROFILE,FPS,PING};
         float is=style.size(ICON),h=Math.max(20,is+8),w=10;for(int i=0;i<labels.length;i++){w+=is+3+textWidth(labels[i],parts[i],i==0)+(i<labels.length-1?8:0);h=Math.max(h,style.size(parts[i])+8);}bounds(Math.max(w,w*style.width.getFloat()),h);panel(g,x,y,width,height);
         float px=x+5;for(int i=0;i<labels.length;i++){

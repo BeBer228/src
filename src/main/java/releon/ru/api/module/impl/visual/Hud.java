@@ -42,7 +42,7 @@ public class Hud extends Module {
 
     private final MultiModeSetting elements = register(new MultiModeSetting("Elements", "HUD elements to render.",
             ELEMENTS, ELEMENTS));
-    private final ModeSetting style = register(new ModeSetting("HUD Style", "Base — текущий HUD, New — HUD из Include.",
+    private final ModeSetting style = register(new ModeSetting("HUD Style", "Base — текущий HUD, New — HUD из Titanium.",
             "Base", "Base", "New"));
     private final BooleanSetting blur = register(new BooleanSetting("Blur", "Use blurred HUD backgrounds.", true));
     private final BooleanSetting glow = register(new BooleanSetting("Glow", "Use glow effects on HUD elements.", true));

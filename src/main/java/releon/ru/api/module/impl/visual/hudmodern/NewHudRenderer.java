@@ -27,7 +27,7 @@ public final class NewHudRenderer extends Module {
     private long manualUntil;
     private Object world;
     public NewHudRenderer() {
-        super("HUD New", "Include NEW HUD renderer.", ModuleCategory.VISUAL);
+        super("HUD New", "Titanium NEW HUD renderer.", ModuleCategory.VISUAL);
         instance = this;
         settings = new NewHudSettings(this);
         for (var kind:NewHudSettings.Kind.values()) elements.put(kind,new NewHudElement(kind,settings.style(kind)));
